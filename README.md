@@ -39,7 +39,7 @@ npx vercel --prod
 
 `index.html` 裡的 `CONFIG` 可以直接修改：
 
-- `depth`：分層深度倍率，1 是預設，2 是兩倍立體
+- `depth`：分層深度倍率，目前是 1.8，1 是最初的版本
 - `cubeSize`：立方體大小，以 1 為卡片寬度
 - `cubeLift`：立方體浮出卡面的高度
 - `sway`：立方體左右擺動的幅度
