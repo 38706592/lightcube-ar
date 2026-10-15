@@ -46,7 +46,7 @@
     background:#000; color:var(--paper); font-weight:900; font-size:15px; letter-spacing:1px; padding:8px 12px; white-space:nowrap; }
 
   /* ---------- message ---------- */
-  #msg { position:fixed; left:16px; right:16px; bottom:24px; z-index:30; display:none; background:#000; color:var(--paper);
+  #msg { position:fixed; left:16px; right:16px; top:16px; max-height:70vh; overflow:auto; z-index:30; display:none; background:#000; color:var(--paper);
     border:1.5px solid var(--orange); padding:14px 16px; font-size:14px; line-height:1.6; font-weight:700; }
   #msg.on { display:block; }
 </style>
@@ -297,8 +297,32 @@ function scheduleGlitch(S, now) {
 }
 
 /* ---------- preflight: find the real reason before starting ---------- */
-const IN_APP = /Line\/|FBAN|FBAV|Instagram|MicroMessenger|; wv\)/i.test(navigator.userAgent);
-const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const UA = navigator.userAgent;
+const IS_IOS = /iPhone|iPad|iPod/i.test(UA);
+const IS_ANDROID = /Android/i.test(UA);
+// Android WebViews (in-app browsers) carry "; wv)" or "Version/x.x Chrome"
+const IN_APP = /Line\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|Discord|Telegram|GSA\/|; wv\)/i.test(UA)
+  || (IS_ANDROID && /Version\/\d/.test(UA) && /Chrome\//.test(UA));
+const IS_REAL_CHROME = IS_ANDROID && /Chrome\/\d/.test(UA) && !IN_APP && !/SamsungBrowser|EdgA|OPR|Firefox/i.test(UA);
+function browserName() {
+  if (IN_APP) return '內建瀏覽器（App 內開啟）';
+  if (/SamsungBrowser/i.test(UA)) return 'Samsung Internet';
+  if (/EdgA/i.test(UA)) return 'Edge';
+  if (/Firefox/i.test(UA)) return 'Firefox';
+  if (IS_REAL_CHROME) return 'Chrome';
+  if (IS_IOS && /CriOS/i.test(UA)) return 'Chrome (iOS)';
+  if (IS_IOS) return 'Safari';
+  return '未知瀏覽器';
+}
+function addOpenInChrome() {
+  if (!IS_ANDROID || IS_REAL_CHROME) return;
+  const m = $('#msg');
+  const a = document.createElement('a');
+  a.href = 'intent://' + location.host + location.pathname + '#Intent;scheme=https;package=com.android.chrome;end';
+  a.textContent = '用 Chrome 開啟 →';
+  a.style.cssText = 'display:block;margin-top:12px;background:#FF9505;color:#000;text-align:center;font-weight:900;padding:12px;text-decoration:none;font-size:16px';
+  m.appendChild(a);
+}
 const MSG = {
   inapp: '你正在 LINE／IG／FB 的內建瀏覽器裡，這類瀏覽器通常不能開相機。請點右上角「⋯」→「用預設瀏覽器開啟」，改用 Safari 或 Chrome。',
   insecure: '這個網址不是 https，手機不允許開相機。請改用 https:// 開頭的網址。',
@@ -306,7 +330,7 @@ const MSG = {
   notarget: '還沒有 AR 辨識檔（targets.mind），所以目前無法辨識酷卡。這不是相機權限的問題：等正面定稿、上傳 targets.mind 之後就能使用。',
   denied: IS_IOS
     ? '相機權限被拒絕。iPhone：點網址列左邊的「大小」(aA) →「網站設定」→ 相機改成「允許」，然後重新整理；或到「設定 › Safari › 相機」改成「詢問」或「允許」。'
-    : '相機權限被拒絕。Android Chrome：點網址列左邊的圖示 →「權限」→ 相機改成「允許」，然後重新整理。',
+    : '相機被拒絕。如果手機設定裡相機權限是開著的，通常代表你不是在 Chrome 裡開啟（例如從 LINE、掃碼 App、Google 智慧鏡頭點開）。請按下方按鈕改用 Chrome 開啟；若已經在 Chrome，請到 Chrome ⋮ › 設定 › 網站設定 › 相機，確認本網站不在「已封鎖」。',
   nocam: '找不到可用的相機。',
   busy: '相機正被其他 App 使用中，請關掉其他用到相機的 App 後再試一次。',
 };
@@ -330,7 +354,11 @@ async function preflight() {
   stream.getTracks().forEach((t) => t.stop());
 }
 
-if (IN_APP) showMsg(MSG.inapp);
+async function cameraPermState() {
+  try { return (await navigator.permissions.query({ name: 'camera' })).state; } catch (e) { return 'n/a'; }
+}
+
+if (IN_APP) { showMsg(MSG.inapp); addOpenInChrome(); }
 
 /* ---------- boot ---------- */
 async function startAR() {
@@ -340,7 +368,11 @@ async function startAR() {
     await preflight();
   } catch (e) {
     btn.disabled = false; btn.textContent = '重試';
-    showMsg(MSG[e.code] || ('AR 啟動失敗（' + (e.detail || e.message) + '）'));
+    const perm = await cameraPermState();
+    showMsg((MSG[e.code] || 'AR 啟動失敗。') +
+      '\n\n[診斷] ' + browserName() + '｜錯誤：' + (e.detail || e.code) + '｜相機權限狀態：' + perm);
+    $('#msg').style.whiteSpace = 'pre-line';
+    if (['inapp', 'denied', 'nomedia', 'unknown'].includes(e.code)) addOpenInChrome();
     return;
   }
   const mindar = new MindARThree({
