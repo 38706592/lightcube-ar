@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>光影立方 LIGHT CUBE · AR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@700;900&family=Space+Grotesk:wght@700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --blue:#2660A4; --orange:#FF9505; --black:#000; --paper:#F6F4EF; }
+  html, body { margin:0; height:100%; background:#000; overflow:hidden; color:var(--paper);
+    font-family:'Noto Sans TC', sans-serif; -webkit-tap-highlight-color:transparent; }
+  #ar { position:fixed; inset:0; }
+
+  /* ---------- start screen ---------- */
+  #start { position:fixed; inset:0; z-index:20; background:var(--paper); color:#000;
+    display:flex; flex-direction:column; justify-content:space-between; padding:28px 22px; box-sizing:border-box; }
+  #start .frame { position:absolute; inset:14px; border:1.5px solid #000; pointer-events:none; }
+  #start .top { display:flex; justify-content:space-between; font-family:'Space Mono', monospace; font-size:12px; letter-spacing:2px; position:relative; }
+  #start h1 { position:relative; margin:0; font-family:'Space Grotesk', sans-serif; font-weight:700;
+    font-size:clamp(64px, 22vw, 120px); line-height:.9; letter-spacing:-3px;
+    text-shadow:-6px 0 0 var(--orange), 6px 0 0 var(--blue); }
+  #start h2 { position:relative; margin:14px 0 0; font-size:28px; font-weight:900; letter-spacing:2px; }
+  #start p { position:relative; margin:10px 0 0; font-size:15px; line-height:1.6; font-weight:700; }
+  #start .hl { background:#000; color:var(--paper); padding:0 5px; }
+  #go { position:relative; appearance:none; border:0; background:#000; color:var(--paper);
+    font-family:'Noto Sans TC', sans-serif; font-weight:900; font-size:20px; letter-spacing:2px;
+    min-height:60px; width:100%; cursor:pointer; box-shadow:6px 6px 0 var(--orange); }
+  #go:active { transform:translate(3px,3px); box-shadow:3px 3px 0 var(--orange); }
+  #go[disabled] { opacity:.6; }
+  .bars { position:relative; height:6px; background:var(--orange); margin:18px 0; }
+  .small { position:relative; font-family:'Space Mono', monospace; font-size:11px; margin-top:12px; text-align:center; }
+
+  /* ---------- scanning overlay ---------- */
+  #scan { position:fixed; inset:0; z-index:10; display:none; align-items:center; justify-content:center; pointer-events:none; }
+  #scan.on { display:flex; }
+  #scan .box { position:relative; width:min(66vw, 46vh); aspect-ratio:600/888; border:1.5px solid rgba(246,244,239,.85); }
+  #scan .box i { position:absolute; width:12px; height:12px; background:var(--paper); border:1.5px solid #000; box-sizing:border-box; }
+  #scan .box i:nth-child(1){left:-7px;top:-7px} #scan .box i:nth-child(2){right:-7px;top:-7px}
+  #scan .box i:nth-child(3){left:-7px;bottom:-7px} #scan .box i:nth-child(4){right:-7px;bottom:-7px}
+  #scan .line { position:absolute; left:0; right:0; height:3px; background:var(--orange); animation:sweep 2.2s linear infinite; }
+  @keyframes sweep { from { top:0 } to { top:100% } }
+  #scan .label { position:absolute; left:50%; bottom:calc(50% - min(66vw,46vh)*0.74 - 52px); transform:translateX(-50%);
+    background:#000; color:var(--paper); font-weight:900; font-size:15px; letter-spacing:1px; padding:8px 12px; white-space:nowrap; }
+
+  /* ---------- message ---------- */
+  #msg { position:fixed; left:16px; right:16px; bottom:24px; z-index:30; display:none; background:#000; color:var(--paper);
+    border:1.5px solid var(--orange); padding:14px 16px; font-size:14px; line-height:1.6; font-weight:700; }
+  #msg.on { display:block; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="ar"></div>
+
+<section id="start">
+  <div class="frame"></div>
+  <div class="top"><span>115 學年度</span><span>2026.12.05—12.19</span></div>
+  <div>
+    <h1>LIGHT<br>CUBE</h1>
+    <h2>光影立方・AR</h2>
+    <p>開啟相機，把鏡頭對準 <span class="hl">酷卡正面</span>，<br>立方體會從卡片裡浮出來。</p>
+  </div>
+  <div>
+    <div class="bars"></div>
+    <button id="go" type="button">開啟相機 START AR</button>
+    <div class="small">需允許相機權限｜治平高中 商業與管理群 多媒體技術科</div>
+  </div>
+</section>
+
+<div id="scan" aria-live="polite">
+  <div class="box"><i></i><i></i><i></i><i></i><div class="line"></div></div>
+  <div class="label">將鏡頭對準酷卡正面</div>
+</div>
+
+<div id="msg" role="alert"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { MindARThree } from 'mindar-image-three';
+
+/* ================= CONFIG (可自行調整) ================= */
+const CONFIG = {
+  target: './targets.mind',   // 用酷卡正面編譯出的辨識檔
+  cubeSize: 0.13,             // 1 = 卡片寬度
+  stackOffset: [0, -0.02],    // 立方體在卡面上的位置 (x, y)，0,0 = 卡片中心
+  spinSpeed: 0.25,            // 自轉速度 (rad/s)
+  glitchEvery: [1.2, 2.8],    // 故障閃爍間隔（秒，隨機範圍）
+  particles: 220,             // 數位粒子數量
+};
+const COL = { blue: 0x2660A4, orange: 0xFF9505, black: 0x000000, paper: 0xF6F4EF };
+/* ======================================================= */
+
+const $ = (s) => document.querySelector(s);
+const showMsg = (t) => { const m = $('#msg'); m.textContent = t; m.classList.add('on'); };
+
+/* ---------- textures ---------- */
+function hatchTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#F6F4EF'; g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = '#000'; g.lineWidth = 7;
+  for (let i = -128; i < 256; i += 18) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const HATCH = hatchTexture();
+
+async function tagTexture() {
+  try { await document.fonts.load('900 60px "Noto Sans TC"'); await document.fonts.load('700 40px "Space Mono"'); } catch (e) {}
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, 1024, 256);
+  g.fillStyle = '#FF9505'; g.fillRect(0, 0, 18, 256);
+  g.fillStyle = '#2660A4'; g.fillRect(18, 0, 10, 256);
+  g.fillStyle = '#F6F4EF';
+  g.font = '900 84px "Noto Sans TC", sans-serif'; g.fillText('光影立方 LIGHT CUBE', 60, 112);
+  g.font = '700 40px "Space Mono", monospace'; g.fillStyle = '#FF9505';
+  g.fillText('2026.12.05 — 12.19', 60, 186);
+  g.fillStyle = '#F6F4EF'; g.font = '700 34px "Noto Sans TC", sans-serif';
+  g.fillText('治平高中 跆拳道館', 60, 232);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+/* ---------- cube factory ---------- */
+// faces of BoxGeometry: [+x, -x, +y, -y, +z(top, out of card), -z]
+const TYPES = {
+  B: { top: 'hatch', l: COL.blue,   r: COL.black },
+  O: { top: COL.orange, l: COL.black, r: COL.blue },
+  W: { top: COL.paper, l: 'hatch',  r: COL.blue },
+  K: { top: COL.blue,  l: COL.orange, r: COL.black },
+};
+const mat = (v) => v === 'hatch' ? new THREE.MeshBasicMaterial({ map: HATCH }) : new THREE.MeshBasicMaterial({ color: v });
+
+function makeCube(type, s) {
+  const t = TYPES[type];
+  const g = new THREE.Group();
+  const geo = new THREE.BoxGeometry(s * 0.94, s * 0.94, s * 0.94);
+  const body = new THREE.Mesh(geo, [mat(t.r), mat(t.r), mat(t.l), mat(t.l), mat(t.top), mat(COL.black)]);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: COL.black }));
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(s * 1.02, s * 1.02, s * 1.02),
+    new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const ghostA = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: .85, depthWrite: false }));
+  const ghostB = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COL.blue,   transparent: true, opacity: .85, depthWrite: false }));
+  ghostA.visible = ghostB.visible = false;
+  ghostA.renderOrder = ghostB.renderOrder = -1;
+  g.add(ghostA, ghostB, body, edges, glow);
+  return { g, body, glow, ghostA, ghostB };
+}
+
+/* ---------- scene ---------- */
+async function build(anchorGroup) {
+  const s = CONFIG.cubeSize;
+  const stage = new THREE.Group();
+  stage.position.set(CONFIG.stackOffset[0], CONFIG.stackOffset[1], 0);
+  anchorGroup.add(stage);
+
+  // calibration frame (like the card's selection frame)
+  const fw = 0.94 / 2, fh = (0.94 * 888 / 600) / 2 - 0.02;
+  const frameGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-fw, -fh, 0.002), new THREE.Vector3(fw, -fh, 0.002),
+    new THREE.Vector3(fw, fh, 0.002), new THREE.Vector3(-fw, fh, 0.002)]);
+  const frame = new THREE.LineLoop(frameGeo, new THREE.LineBasicMaterial({ color: COL.orange, transparent: true, opacity: 0 }));
+  anchorGroup.add(frame);
+
+  const spin = new THREE.Group(); stage.add(spin);
+
+  // same 11-cube stack as the printed illustration: [i, j, k, type]
+  const layout = [
+    [0,0,0,'B'],[1,0,0,'O'],[0,1,0,'W'],[1,1,0,'B'],[2,0,0,'W'],[0,2,0,'O'],[2,1,0,'K'],
+    [0,0,1,'K'],[1,0,1,'B'],[0,1,1,'O'],
+    [0,0,2,'W'],
+  ];
+  const cubes = layout.map(([i, j, k, type], idx) => {
+    const c = makeCube(type, s);
+    c.home = new THREE.Vector3((i - 1) * s, (j - 1) * s, k * s + s / 2);
+    c.k = k;
+    c.delay = (k * 4 + i + j) * 0.07;
+    c.glitchUntil = 0; c.glitchDX = 0;
+    c.g.position.set(c.home.x, c.home.y, -s / 2);
+    c.g.scale.setScalar(0.001);
+    spin.add(c.g);
+    return c;
+  });
+
+  // floating mini cubes
+  const minis = [['O', 0.22, 0.18, 0.42], ['W', -0.24, -0.12, 0.30], ['K', 0.2, -0.22, 0.22]].map(([t, x, y, z]) => {
+    const c = makeCube(t, s * 0.4); c.home = new THREE.Vector3(x, y, z); c.g.position.copy(c.home); c.g.scale.setScalar(0.001);
+    spin.add(c.g); return c;
+  });
+
+  // digital particles
+  const makeParticles = (n, color) => {
+    const pos = new Float32Array(n * 3), spd = new Float32Array(n);
+    for (let p = 0; p < n; p++) {
+      pos[p*3] = (Math.random() - .5) * 0.6; pos[p*3+1] = (Math.random() - .5) * 0.6; pos[p*3+2] = Math.random() * 0.6;
+      spd[p] = 0.04 + Math.random() * 0.12;
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: 0.009, transparent: true, opacity: 0 }));
+    pts.userData.spd = spd; stage.add(pts); return pts;
+  };
+  const partsA = makeParticles(Math.floor(CONFIG.particles / 2), COL.orange);
+  const partsB = makeParticles(Math.ceil(CONFIG.particles / 2), COL.blue);
+
+  // scan plane sweeping up through the stack (projection-mapping feel)
+  const sweep = new THREE.Mesh(new THREE.PlaneGeometry(s * 3.6, s * 3.6),
+    new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  spin.add(sweep);
+
+  // info tag
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.155),
+    new THREE.MeshBasicMaterial({ map: await tagTexture(), transparent: true, opacity: 0 }));
+  tag.position.set(0, -0.47, 0.06); tag.rotation.x = 0.9;
+  stage.add(tag);
+
+  return { cubes, minis, partsA, partsB, sweep, tag, frame, spin, s };
+}
+
+/* ---------- animation ---------- */
+const easeOutBack = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+const rand = (a, b) => a + Math.random() * (b - a);
+
+function animate(S, t, dt, now) {
+  const s = S.s;
+  // emerge
+  S.cubes.forEach((c) => {
+    const p = clamp01((t - c.delay) / 0.7), e = p === 0 ? 0 : easeOutBack(p);
+    c.g.scale.setScalar(Math.max(0.001, e));
+    c.g.position.z = THREE.MathUtils.lerp(-s / 2, c.home.z, e) + Math.sin(now * 1.6 + c.delay * 9) * 0.004 * p;
+    // glitch offset
+    const glitching = now < c.glitchUntil;
+    c.g.position.x = c.home.x + (glitching ? c.glitchDX : 0);
+    c.ghostA.visible = c.ghostB.visible = glitching;
+    if (glitching) { c.ghostA.position.x = -0.018; c.ghostB.position.x = 0.018; }
+  });
+  S.minis.forEach((c, n) => {
+    const p = clamp01((t - 1.0 - n * 0.15) / 0.6);
+    c.g.scale.setScalar(Math.max(0.001, p ? easeOutBack(p) : 0));
+    c.g.position.z = c.home.z + Math.sin(now * 1.2 + n) * 0.02;
+    c.g.rotation.x += dt * 0.9; c.g.rotation.y += dt * 0.6;
+  });
+
+  // spin after the stack has landed
+  const settled = clamp01((t - 1.2) / 1.0);
+  S.spin.rotation.z += dt * CONFIG.spinSpeed * settled;
+
+  // scan sweep + per-cube light-up
+  const H = s * 3.2, period = 2.6;
+  const sz = ((now % period) / period) * H;
+  S.sweep.position.z = sz;
+  S.sweep.material.opacity = 0.18 * settled;
+  S.cubes.forEach((c) => {
+    const d = Math.abs(c.home.z - sz) / (s * 0.7);
+    c.glow.material.opacity = Math.max(0, 1 - d) * 0.55 * settled;
+  });
+
+  // particles
+  [S.partsA, S.partsB].forEach((pts) => {
+    const pos = pts.geometry.attributes.position.array, spd = pts.userData.spd;
+    for (let p = 0; p < spd.length; p++) {
+      pos[p*3+2] += spd[p] * dt;
+      if (pos[p*3+2] > 0.6) { pos[p*3+2] = 0; pos[p*3] = (Math.random() - .5) * 0.6; pos[p*3+1] = (Math.random() - .5) * 0.6; }
+    }
+    pts.geometry.attributes.position.needsUpdate = true;
+    pts.material.opacity = 0.9 * clamp01((t - 0.4) / 0.8);
+  });
+
+  // tag + frame
+  S.tag.material.opacity = clamp01((t - 1.6) / 0.5);
+  S.frame.material.opacity = t < 0.6 ? (Math.floor(t * 20) % 2 ? 1 : 0.2) : 0.6;
+}
+
+function scheduleGlitch(S, now) {
+  const pool = S.cubes;
+  const n = Math.random() < 0.3 ? 0 : 1 + Math.floor(Math.random() * 3);
+  if (n === 0) {
+    // slice glitch: a whole layer jumps together
+    const k = Math.floor(Math.random() * 2), dx = rand(-0.05, 0.05), until = now + rand(0.08, 0.18);
+    pool.filter((c) => c.k === k).forEach((c) => { c.glitchDX = dx; c.glitchUntil = until; });
+  } else {
+    for (let q = 0; q < n; q++) {
+      const c = pool[Math.floor(Math.random() * pool.length)];
+      c.glitchDX = rand(-0.04, 0.04); c.glitchUntil = now + rand(0.06, 0.2);
+    }
+  }
+}
+
+/* ---------- boot ---------- */
+async function startAR() {
+  const btn = $('#go'); btn.disabled = true; btn.textContent = '啟動中…';
+  const mindar = new MindARThree({
+    container: $('#ar'),
+    imageTargetSrc: CONFIG.target,
+    uiLoading: 'no', uiScanning: 'no', uiError: 'no',
+    filterMinCF: 0.0001, filterBeta: 0.01,
+  });
+  const { renderer, scene, camera } = mindar;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  const anchor = mindar.addAnchor(0);
+  const S = await build(anchor.group);
+
+  let found = false, t = 0, nextGlitch = 0;
+  anchor.onTargetFound = () => { found = true; t = 0; $('#scan').classList.remove('on'); if (navigator.vibrate) navigator.vibrate(30); };
+  anchor.onTargetLost = () => { found = false; $('#scan').classList.add('on'); };
+
+  try {
+    await mindar.start();
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false; btn.textContent = '重新開啟相機';
+    showMsg('無法開啟相機：請確認已允許相機權限，並使用 https 網址開啟（LINE / IG 內建瀏覽器若失敗，請改用 Safari 或 Chrome）。');
+    return;
+  }
+  $('#start').style.display = 'none';
+  $('#scan').classList.add('on');
+
+  const clock = new THREE.Clock();
+  renderer.setAnimationLoop(() => {
+    const dt = Math.min(clock.getDelta(), 0.05), now = clock.elapsedTime;
+    if (found) {
+      t += dt;
+      if (now > nextGlitch) { scheduleGlitch(S, now); nextGlitch = now + rand(...CONFIG.glitchEvery); }
+      animate(S, t, dt, now);
+    }
+    renderer.render(scene, camera);
+  });
+}
+
+$('#go').addEventListener('click', () => {
+  startAR().catch((e) => {
+    console.error(e);
+    showMsg('載入失敗：請確認 targets.mind 已放在網頁同一個資料夾，然後重新整理。');
+    const b = $('#go'); b.disabled = false; b.textContent = '重試';
+  });
+});
+</script>
+</body>
+</html>
