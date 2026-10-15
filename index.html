@@ -557,7 +557,9 @@ async function startAR() {
     container: $('#ar'),
     imageTargetSrc: CONFIG.target,
     uiLoading: 'no', uiScanning: 'no', uiError: 'no',
-    filterMinCF: 0.0001, filterBeta: 0.01,
+    // tracking: lower filterBeta = smoother but laggier; higher = sticks tighter to the card
+    filterMinCF: 0.001, filterBeta: 50,
+    warmupTolerance: 3, missTolerance: 8,
   });
   const { renderer, scene, camera } = mindar;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
