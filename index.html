@@ -296,9 +296,53 @@ function scheduleGlitch(S, now) {
   }
 }
 
+/* ---------- preflight: find the real reason before starting ---------- */
+const IN_APP = /Line\/|FBAN|FBAV|Instagram|MicroMessenger|; wv\)/i.test(navigator.userAgent);
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const MSG = {
+  inapp: '你正在 LINE／IG／FB 的內建瀏覽器裡，這類瀏覽器通常不能開相機。請點右上角「⋯」→「用預設瀏覽器開啟」，改用 Safari 或 Chrome。',
+  insecure: '這個網址不是 https，手機不允許開相機。請改用 https:// 開頭的網址。',
+  nomedia: '這個瀏覽器不支援相機存取。請改用 Safari（iPhone）或 Chrome（Android）開啟。',
+  notarget: '還沒有 AR 辨識檔（targets.mind），所以目前無法辨識酷卡。這不是相機權限的問題：等正面定稿、上傳 targets.mind 之後就能使用。',
+  denied: IS_IOS
+    ? '相機權限被拒絕。iPhone：點網址列左邊的「大小」(aA) →「網站設定」→ 相機改成「允許」，然後重新整理；或到「設定 › Safari › 相機」改成「詢問」或「允許」。'
+    : '相機權限被拒絕。Android Chrome：點網址列左邊的圖示 →「權限」→ 相機改成「允許」，然後重新整理。',
+  nocam: '找不到可用的相機。',
+  busy: '相機正被其他 App 使用中，請關掉其他用到相機的 App 後再試一次。',
+};
+class ARError extends Error { constructor(code, detail) { super(code); this.code = code; this.detail = detail; } }
+
+async function preflight() {
+  if (!window.isSecureContext) throw new ARError('insecure');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new ARError(IN_APP ? 'inapp' : 'nomedia');
+  const r = await fetch(CONFIG.target, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+  if (!r || !r.ok) throw new ARError('notarget');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  } catch (e) {
+    const n = e && e.name;
+    if (n === 'NotAllowedError' || n === 'SecurityError') throw new ARError(IN_APP ? 'inapp' : 'denied', n);
+    if (n === 'NotFoundError' || n === 'OverconstrainedError') throw new ARError('nocam', n);
+    if (n === 'NotReadableError' || n === 'AbortError') throw new ARError('busy', n);
+    throw new ARError('unknown', n || String(e));
+  }
+  stream.getTracks().forEach((t) => t.stop());
+}
+
+if (IN_APP) showMsg(MSG.inapp);
+
 /* ---------- boot ---------- */
 async function startAR() {
   const btn = $('#go'); btn.disabled = true; btn.textContent = '啟動中…';
+  $('#msg').classList.remove('on');
+  try {
+    await preflight();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '重試';
+    showMsg(MSG[e.code] || ('AR 啟動失敗（' + (e.detail || e.message) + '）'));
+    return;
+  }
   const mindar = new MindARThree({
     container: $('#ar'),
     imageTargetSrc: CONFIG.target,
@@ -320,7 +364,7 @@ async function startAR() {
   } catch (err) {
     console.error(err);
     btn.disabled = false; btn.textContent = '重新開啟相機';
-    showMsg('無法開啟相機：請確認已允許相機權限，並使用 https 網址開啟（LINE / IG 內建瀏覽器若失敗，請改用 Safari 或 Chrome）。');
+    showMsg('AR 啟動失敗（' + ((err && (err.name || err.message)) || 'unknown') + '）。請重新整理後再試一次。');
     return;
   }
   $('#start').style.display = 'none';
