@@ -39,9 +39,11 @@ npx vercel --prod
 
 `index.html` 裡的 `CONFIG` 可以直接修改：
 
+- `depth`：分層深度倍率，1 是預設，2 是兩倍立體
 - `cubeSize`：立方體大小，以 1 為卡片寬度
-- `stackOffset`：立方體在卡面上的位置
-- `spinSpeed`：自轉速度
+- `cubeLift`：立方體浮出卡面的高度
+- `sway`：立方體左右擺動的幅度
+- `explodeEvery`：立方體爆開重組的間隔秒數
 - `glitchEvery`：故障閃爍的間隔秒數
 - `particles`：數位粒子數量
 

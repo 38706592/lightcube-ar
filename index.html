@@ -92,205 +92,383 @@ import { MindARThree } from 'mindar-image-three';
 /* ================= CONFIG (可自行調整) ================= */
 const CONFIG = {
   target: './targets.mind',   // 用酷卡正面編譯出的辨識檔
-  cubeSize: 0.13,             // 1 = 卡片寬度
-  stackOffset: [0, -0.02],    // 立方體在卡面上的位置 (x, y)，0,0 = 卡片中心
-  spinSpeed: 0.25,            // 自轉速度 (rad/s)
-  glitchEvery: [1.2, 2.8],    // 故障閃爍間隔（秒，隨機範圍）
-  particles: 220,             // 數位粒子數量
+  depth: 1.0,                 // 分層深度倍率：1 = 預設，2 = 兩倍立體
+  cubeSize: 0.12,             // 立方體大小（1 = 卡片寬度）
+  cubeLift: 0.22,             // 立方體浮出卡面的高度
+  sway: 0.45,                 // 立方體左右擺動幅度 (rad)
+  explodeEvery: 6,            // 立方體爆開重組的間隔（秒）
+  glitchEvery: [1.0, 2.4],    // 故障閃爍間隔（秒，隨機範圍）
+  particles: 240,             // 數位粒子數量
 };
 const COL = { blue: 0x2660A4, orange: 0xFF9505, black: 0x000000, paper: 0xF6F4EF };
+const HEX = { blue: '#2660A4', orange: '#FF9505', black: '#000000', paper: '#F6F4EF', grid: '#E4EBF4' };
 /* ======================================================= */
 
 const $ = (s) => document.querySelector(s);
 const showMsg = (t) => { const m = $('#msg'); m.textContent = t; m.classList.add('on'); };
 
-/* ---------- textures ---------- */
+/* ---------- card space helpers (design px 600×888 → card units, width = 1) ---------- */
+const CW = 600, CH = 888, HALF_H = CH / CW / 2;   // 0.74
+const toCard = (x, y, w, h) => ({ cx: (x + w / 2) / CW - 0.5, cy: HALF_H - (y + h / 2) / CW, w: w / CW, h: h / CW });
+const PX = 3; // canvas pixels per design px
+
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(w * PX); c.height = Math.ceil(h * PX);
+  const g = c.getContext('2d'); g.scale(PX, PX);
+  draw(g, w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+const setLS = (g, v) => { if ('letterSpacing' in g) g.letterSpacing = v + 'px'; };
+
+async function loadFonts() {
+  try {
+    await Promise.all([
+      document.fonts.load('900 172px "Noto Sans TC"'), document.fonts.load('700 13px "Noto Sans TC"'),
+      document.fonts.load('500 13px "Noto Sans TC"'),  document.fonts.load('700 58px "Space Grotesk"'),
+      document.fonts.load('700 17px "Space Mono"'),    document.fonts.load('400 11px "Space Mono"'),
+    ]);
+  } catch (e) {}
+}
+
+/* ---------- textures for each card element ---------- */
 function hatchTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#F6F4EF'; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = HEX.paper; g.fillRect(0, 0, 128, 128);
   g.strokeStyle = '#000'; g.lineWidth = 7;
   for (let i = -128; i < 256; i += 18) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-const HATCH = hatchTexture();
+const gridTex = (w, h) => canvasTex(w, h, (g) => {
+  g.fillStyle = HEX.grid; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(38,96,164,.38)'; g.lineWidth = 1;
+  for (let x = 0.5; x < w; x += 12) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+  for (let y = 0.5; y < h; y += 12) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+});
+const ringTex = (w, h) => canvasTex(w, h, (g) => {
+  const cx = w * 0.46, cy = h * 0.52;
+  g.strokeStyle = '#000'; g.lineWidth = 1.6;
+  for (let r = 0.8; r < Math.hypot(w, h); r += 5.5) { g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke(); }
+  g.globalCompositeOperation = 'destination-in';
+  g.save(); g.translate(w / 2, h / 2); g.scale(1, h / w);
+  const grd = g.createRadialGradient(0, 0, 0, 0, 0, w / 2);
+  grd.addColorStop(0, 'rgba(0,0,0,.9)'); grd.addColorStop(0.55, 'rgba(0,0,0,.9)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(-w, -w, w * 2, w * 2); g.restore();
+});
+const scanTex = (w, h) => canvasTex(w, h, (g) => {
+  g.fillStyle = HEX.orange; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#000'; for (let y = h - 2; y > -2; y -= 5) g.fillRect(0, y, w, 2);
+});
+const checkTex = (w, h) => canvasTex(w, h, (g) => {
+  g.fillStyle = '#000';
+  for (let y = 0; y < h; y += 14) for (let x = 0; x < w; x += 14) if (((x + y) / 14) % 2 === 0) g.fillRect(x, y, 14, 14);
+});
+const dotsTex = (vertical, colors) => {
+  const w = vertical ? 9 : 39, h = vertical ? 39 : 9;
+  return canvasTex(w, h, (g) => colors.forEach((c, i) => {
+    g.fillStyle = c; g.beginPath();
+    g.arc(vertical ? 4.5 : 4.5 + i * 15, vertical ? 4.5 + i * 15 : 4.5, 4.5, 0, Math.PI * 2); g.fill();
+  }));
+};
+const crossTex = (s, bold) => canvasTex(s, s, (g) => {
+  g.strokeStyle = '#000'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(s / 2, 0); g.lineTo(s / 2, s); g.moveTo(0, s / 2); g.lineTo(s, s / 2); g.stroke();
+  if (bold) { g.lineWidth = 2.5; const k = s * 4 / 36; g.beginPath(); g.moveTo(s / 2 - k, s / 2); g.lineTo(s / 2 + k, s / 2); g.moveTo(s / 2, s / 2 - k); g.lineTo(s / 2, s / 2 + k); g.stroke(); }
+});
+const textTex = (w, h, text, font, color, ls = 0, opts = {}) => canvasTex(w, h, (g) => {
+  g.font = font; g.fillStyle = color; setLS(g, ls); g.textBaseline = 'alphabetic';
+  if (opts.rotate) { g.translate(w / 2, h / 2); g.rotate(opts.rotate); g.translate(-h / 2, -w / 2); }
+  g.fillText(text, opts.x || 0, opts.y || h * 0.8);
+});
+// big title: one colour, optional glitch slice
+const titleTex = (w, h, text, color, slice) => canvasTex(w, h, (g) => {
+  g.font = '900 172px "Noto Sans TC", sans-serif'; setLS(g, -8); g.fillStyle = color;
+  g.fillText(text, 0, 158);
+  if (slice) {
+    g.save(); g.beginPath(); g.rect(0, 172 * slice.top, w, 172 * slice.size); g.clip();
+    g.fillStyle = HEX.paper; g.fillRect(0, 0, w, h);
+    g.fillStyle = color; g.fillText(text, slice.dx, 158); g.restore();
+  }
+});
+const dateTex = () => canvasTex(200, 120, (g) => {
+  const R = 200;
+  g.textAlign = 'right'; g.fillStyle = '#000';
+  g.font = '700 58px "Space Grotesk", sans-serif'; setLS(g, -2); g.fillText('2026', R, 50);
+  setLS(g, 0); g.font = '700 17px "Space Mono", monospace';
+  const d = '12.05 — 12.19', tw = g.measureText(d).width + 16;
+  g.fillStyle = '#000'; g.fillRect(R - tw, 58, tw, 25);
+  g.fillStyle = HEX.paper; g.fillText(d, R - 8, 76);
+  g.fillStyle = '#000'; g.font = '700 13px "Noto Sans TC", sans-serif'; setLS(g, 2); g.fillText('115 學年度', R, 106);
+});
+const frameTex = () => canvasTex(576, 774, (g) => {
+  g.strokeStyle = '#000'; g.lineWidth = 1.5; g.strokeRect(6.75, 6.75, 562.5, 760.5);
+  [[0, 0], [282, 0], [564, 0], [0, 381], [564, 367], [0, 762], [282, 762], [564, 762]].forEach(([x, y]) => {
+    g.fillStyle = HEX.paper; g.fillRect(x, y, 12, 12); g.strokeRect(x + .75, y + .75, 10.5, 10.5);
+  });
+});
+const footerTex = () => canvasTex(564, 64, (g) => {
+  g.fillStyle = '#000'; g.fillRect(0, 0, 64, 64);
+  const cube = (pts, c) => { g.fillStyle = c; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x + 12, y + 12) : g.moveTo(x + 12, y + 12)); g.fill(); };
+  cube([[20, 4], [34, 12], [20, 20], [6, 12]], HEX.orange);
+  cube([[6, 12], [20, 20], [20, 36], [6, 28]], HEX.blue);
+  cube([[20, 20], [34, 12], [34, 28], [20, 36]], HEX.paper);
+  const hl = (x, y, txt, bg, fg) => { const tw = g.measureText(txt).width; g.fillStyle = bg; g.fillRect(x, y - 14, tw + 8, 18); g.fillStyle = fg; g.fillText(txt, x + 4, y); return tw + 8; };
+  g.font = '700 13px "Noto Sans TC", sans-serif';
+  let x = 76; x += hl(x, 27, '光影立方', '#000', HEX.paper); g.fillStyle = '#000'; g.fillText(' LIGHT CUBE 光雕展', x, 27);
+  g.font = '500 13px "Noto Sans TC", sans-serif';
+  x = 76; g.fillStyle = '#000'; g.fillText('商業與管理群 ', x, 49); x += g.measureText('商業與管理群 ').width;
+  x += hl(x, 49, '多媒體技術科', HEX.blue, HEX.paper); g.fillStyle = '#000'; g.fillText(' 科展', x, 49);
+  const bx = 424, pattern = [2, 2, 1, 3, 3, 1, 1, 4];
+  for (let px = bx, i = 0; px < 564; i++) { const wdt = pattern[i % 8]; if (i % 2 === 0) { g.fillStyle = '#000'; g.fillRect(px, 0, wdt, 48); } px += wdt; }
+  g.font = '400 10px "Space Mono", monospace'; g.fillStyle = '#000';
+  g.textAlign = 'left'; g.fillText('115', bx, 62); g.textAlign = 'center'; g.fillText('1205', bx + 70, 62); g.textAlign = 'right'; g.fillText('1219', 564, 62);
+});
 
-async function tagTexture() {
-  try { await document.fonts.load('900 60px "Noto Sans TC"'); await document.fonts.load('700 40px "Space Mono"'); } catch (e) {}
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#000'; g.fillRect(0, 0, 1024, 256);
-  g.fillStyle = '#FF9505'; g.fillRect(0, 0, 18, 256);
-  g.fillStyle = '#2660A4'; g.fillRect(18, 0, 10, 256);
-  g.fillStyle = '#F6F4EF';
-  g.font = '900 84px "Noto Sans TC", sans-serif'; g.fillText('光影立方 LIGHT CUBE', 60, 112);
-  g.font = '700 40px "Space Mono", monospace'; g.fillStyle = '#FF9505';
-  g.fillText('2026.12.05 — 12.19', 60, 186);
-  g.fillStyle = '#F6F4EF'; g.font = '700 34px "Noto Sans TC", sans-serif';
-  g.fillText('治平高中 跆拳道館', 60, 232);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+/* ---------- layered card ---------- */
+const layers = [];
+function addLayer(root, o) {
+  const r = toCard(o.x, o.y, o.w, o.h);
+  const geo = new THREE.PlaneGeometry(r.w, r.h);
+  const mat = new THREE.MeshBasicMaterial({ map: o.tex || null, color: o.tex ? 0xffffff : o.color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(r.cx, r.cy, 0.001);
+  mesh.renderOrder = 10 + Math.round(o.z * 1000);
+  root.add(mesh);
+  let shadow = null;
+  if (o.shadow !== false) {
+    shadow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: o.tex || null, color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+    shadow.position.set(r.cx, r.cy, 0.0015); shadow.renderOrder = 5;
+    root.add(shadow);
+  }
+  const L = { mesh, shadow, z: o.z * CONFIG.depth, cx: r.cx, cy: r.cy, op: o.op ?? 1, delay: o.delay ?? o.z * 3, glitch: !!o.glitch, gUntil: 0, gdx: 0 };
+  layers.push(L);
+  return L;
 }
 
 /* ---------- cube factory ---------- */
-// faces of BoxGeometry: [+x, -x, +y, -y, +z(top, out of card), -z]
+let HATCH;
 const TYPES = {
   B: { top: 'hatch', l: COL.blue,   r: COL.black },
   O: { top: COL.orange, l: COL.black, r: COL.blue },
   W: { top: COL.paper, l: 'hatch',  r: COL.blue },
   K: { top: COL.blue,  l: COL.orange, r: COL.black },
+  L: { top: COL.paper, l: COL.paper, r: COL.paper },
 };
 const mat = (v) => v === 'hatch' ? new THREE.MeshBasicMaterial({ map: HATCH }) : new THREE.MeshBasicMaterial({ color: v });
-
+// stack is built Y-up; BoxGeometry faces: [+x, -x, +y(top), -y, +z, -z]
 function makeCube(type, s) {
   const t = TYPES[type];
   const g = new THREE.Group();
-  const geo = new THREE.BoxGeometry(s * 0.94, s * 0.94, s * 0.94);
-  const body = new THREE.Mesh(geo, [mat(t.r), mat(t.r), mat(t.l), mat(t.l), mat(t.top), mat(COL.black)]);
+  const geo = new THREE.BoxGeometry(s * 0.95, s * 0.95, s * 0.95);
+  const body = new THREE.Mesh(geo, [mat(t.l), mat(t.l), mat(t.top), mat(COL.black), mat(t.r), mat(t.r)]);
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: COL.black }));
-  const glow = new THREE.Mesh(new THREE.BoxGeometry(s * 1.02, s * 1.02, s * 1.02),
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(s * 1.03, s * 1.03, s * 1.03),
     new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   const ghostA = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: .85, depthWrite: false }));
   const ghostB = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COL.blue,   transparent: true, opacity: .85, depthWrite: false }));
   ghostA.visible = ghostB.visible = false;
-  ghostA.renderOrder = ghostB.renderOrder = -1;
+  ghostA.renderOrder = ghostB.renderOrder = 996; glow.renderOrder = 997;
   g.add(ghostA, ghostB, body, edges, glow);
-  return { g, body, glow, ghostA, ghostB };
+  return { g, glow, ghostA, ghostB };
 }
 
 /* ---------- scene ---------- */
-async function build(anchorGroup) {
+async function build(root) {
+  await loadFonts();
+  HATCH = hatchTexture();
+
+  // paper cover: hides the print so the lifted layers don't double up
+  const cover = new THREE.Mesh(new THREE.PlaneGeometry(1, HALF_H * 2),
+    new THREE.MeshBasicMaterial({ color: COL.paper, transparent: true, opacity: 0, depthWrite: false }));
+  cover.position.z = 0.0005; cover.renderOrder = 1; root.add(cover);
+
+  /* layers: x, y, w, h in design px · z = height above the card */
+  // grid paper
+  [[30, 196, 150, 220, .02], [392, 470, 178, 170, .025], [52, 600, 120, 150, .018]].forEach(([x, y, w, h, z]) =>
+    addLayer(root, { x, y, w, h, z, tex: gridTex(w, h) }));
+  // frame + footer
+  addLayer(root, { x: 12, y: 26, w: 576, h: 774, z: .012, tex: frameTex(), shadow: false });
+  addLayer(root, { x: 18, y: 800, w: 564, h: 64, z: .03, tex: footerTex() });
+  // fingerprint rings
+  addLayer(root, { x: 70, y: 220, w: 460, h: 470, z: .045, tex: ringTex(460, 470), shadow: false, op: .9 });
+  // colour blocks
+  addLayer(root, { x: 30, y: 330, w: 64, h: 190, z: .07, color: COL.blue, glitch: true });
+  addLayer(root, { x: 470, y: 196, w: 100, h: 54, z: .09, color: COL.blue });
+  addLayer(root, { x: 520, y: 250, w: 50, h: 150, z: .06, color: COL.orange, glitch: true });
+  addLayer(root, { x: 172, y: 690, w: 70, h: 60, z: .08, color: COL.orange });
+  // glitch bars
+  addLayer(root, { x: 0, y: 452, w: 600, h: 5, z: .1, color: COL.orange, glitch: true });
+  addLayer(root, { x: 330, y: 404, w: 150, h: 26, z: .11, tex: scanTex(150, 26), glitch: true });
+  addLayer(root, { x: 96, y: 560, w: 120, h: 10, z: .095, color: COL.blue, glitch: true });
+  addLayer(root, { x: 240, y: 600, w: 40, h: 4, z: .1, color: COL.black });
+  // bits
+  addLayer(root, { x: 40, y: 120, w: 56, h: 56, z: .11, tex: checkTex(56, 56) });
+  addLayer(root, { x: 196, y: 586, w: 39, h: 9, z: .12, tex: dotsTex(false, [HEX.blue, HEX.orange, '#000']) });
+  addLayer(root, { x: 476, y: 162, w: 9, h: 39, z: .12, tex: dotsTex(true, [HEX.orange, HEX.blue, '#000']) });
+  addLayer(root, { x: 430, y: 270, w: 36, h: 36, z: .13, tex: crossTex(36, true), shadow: false });
+  addLayer(root, { x: 110, y: 470, w: 30, h: 30, z: .13, tex: crossTex(30), shadow: false });
+  addLayer(root, { x: 196, y: 640, w: 30, h: 30, z: .13, tex: crossTex(30), shadow: false });
+  // small text
+  addLayer(root, { x: 194, y: 210, w: 300, h: 16, z: .1, tex: textTex(300, 16, 'CUBE × LIGHT × PARTICLE × SPACE', '400 11px "Space Mono", monospace', '#000', 3, { y: 12 }) });
+  addLayer(root, { x: 546, y: 420, w: 16, h: 250, z: .14, tex: textTex(16, 250, 'PROJECTION MAPPING', '400 12px "Space Mono", monospace', '#000', 6, { rotate: Math.PI / 2, y: 12 }) });
+  addLayer(root, { x: 38, y: 532, w: 18, h: 170, z: .14, tex: textTex(18, 170, 'LIGHT · CUBE', '500 13px "Space Grotesk", sans-serif', HEX.blue, 7, { rotate: -Math.PI / 2, y: 13 }) });
+  addLayer(root, { x: 360, y: 40, w: 200, h: 120, z: .15, tex: dateTex() });
+  // titles: RGB split lives in depth — orange / blue / black sit on separate planes
+  const g6 = 6;
+  addLayer(root, { x: 36 - g6, y: 40, w: 400, h: 180, z: .15, tex: titleTex(400, 180, '光影', HEX.orange), shadow: false, glitch: true });
+  addLayer(root, { x: 36 + g6, y: 40, w: 400, h: 180, z: .17, tex: titleTex(400, 180, '光影', HEX.blue), shadow: false, glitch: true });
+  addLayer(root, { x: 36, y: 40, w: 400, h: 180, z: .19, tex: titleTex(400, 180, '光影', '#000', { top: .46, size: .1, dx: 22 }), glitch: true });
+  addLayer(root, { x: 186, y: 152, w: 46, h: 46, z: .21, color: COL.blue });
+  addLayer(root, { x: 236 + g6, y: 610, w: 364, h: 180, z: .15, tex: titleTex(364, 180, '立方', HEX.orange), shadow: false, glitch: true });
+  addLayer(root, { x: 236 - g6, y: 610, w: 364, h: 180, z: .17, tex: titleTex(364, 180, '立方', HEX.blue), shadow: false, glitch: true });
+  addLayer(root, { x: 236, y: 610, w: 364, h: 180, z: .19, tex: titleTex(364, 180, '立方', '#000', { top: .22, size: .08, dx: -18 }), glitch: true });
+
+  // calibration frame flash
+  const fw = 0.47, fh = HALF_H - 0.02;
+  const frame = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-fw, -fh, 0.002), new THREE.Vector3(fw, -fh, 0.002), new THREE.Vector3(fw, fh, 0.002), new THREE.Vector3(-fw, fh, 0.002)]),
+    new THREE.LineBasicMaterial({ color: COL.orange, transparent: true, opacity: 0 }));
+  root.add(frame);
+
+  // horizontal projector scan line sweeping down through all layers
+  const scan = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.006),
+    new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  scan.renderOrder = 999; root.add(scan);
+
+  /* ---- isometric cube stack, floating above the card ---- */
   const s = CONFIG.cubeSize;
-  const stage = new THREE.Group();
-  stage.position.set(CONFIG.stackOffset[0], CONFIG.stackOffset[1], 0);
-  anchorGroup.add(stage);
+  const stackPos = toCard(105, 236, 390, 421);
+  const tilt = new THREE.Group();                // tilt top toward viewer = isometric look
+  tilt.position.set(stackPos.cx, stackPos.cy, 0.02);
+  tilt.rotation.x = 0.6155;
+  root.add(tilt);
+  const yaw = new THREE.Group(); yaw.rotation.y = Math.PI / 4; tilt.add(yaw);
 
-  // calibration frame (like the card's selection frame)
-  const fw = 0.94 / 2, fh = (0.94 * 888 / 600) / 2 - 0.02;
-  const frameGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-fw, -fh, 0.002), new THREE.Vector3(fw, -fh, 0.002),
-    new THREE.Vector3(fw, fh, 0.002), new THREE.Vector3(-fw, fh, 0.002)]);
-  const frame = new THREE.LineLoop(frameGeo, new THREE.LineBasicMaterial({ color: COL.orange, transparent: true, opacity: 0 }));
-  anchorGroup.add(frame);
-
-  const spin = new THREE.Group(); stage.add(spin);
-
-  // same 11-cube stack as the printed illustration: [i, j, k, type]
   const layout = [
     [0,0,0,'B'],[1,0,0,'O'],[0,1,0,'W'],[1,1,0,'B'],[2,0,0,'W'],[0,2,0,'O'],[2,1,0,'K'],
     [0,0,1,'K'],[1,0,1,'B'],[0,1,1,'O'],
     [0,0,2,'W'],
   ];
-  const cubes = layout.map(([i, j, k, type], idx) => {
+  const cubes = layout.map(([i, j, k, type]) => {
     const c = makeCube(type, s);
-    c.home = new THREE.Vector3((i - 1) * s, (j - 1) * s, k * s + s / 2);
-    c.k = k;
-    c.delay = (k * 4 + i + j) * 0.07;
+    // i → +x, j → +z (toward viewer), k → up
+    c.home = new THREE.Vector3((i - 0.8) * s, (k - 1) * s, (j - 0.8) * s);
+    c.dir = c.home.clone().normalize();
+    c.k = k; c.delay = 0.5 + (k * 3 + i + j) * 0.08;
     c.glitchUntil = 0; c.glitchDX = 0;
-    c.g.position.set(c.home.x, c.home.y, -s / 2);
     c.g.scale.setScalar(0.001);
-    spin.add(c.g);
+    yaw.add(c.g);
     return c;
   });
-
-  // floating mini cubes
-  const minis = [['O', 0.22, 0.18, 0.42], ['W', -0.24, -0.12, 0.30], ['K', 0.2, -0.22, 0.22]].map(([t, x, y, z]) => {
-    const c = makeCube(t, s * 0.4); c.home = new THREE.Vector3(x, y, z); c.g.position.copy(c.home); c.g.scale.setScalar(0.001);
-    spin.add(c.g); return c;
+  const minis = [['O', 0.24, 0.22, 0.10], ['L', -0.26, 0.16, -0.12], ['K', 0.22, -0.2, 0.16], ['W', -0.2, -0.18, 0.2]].map(([t, x, y, z], n) => {
+    const c = makeCube(t, s * 0.4); c.home = new THREE.Vector3(x, y, z); c.g.scale.setScalar(0.001); c.n = n;
+    yaw.add(c.g); return c;
   });
 
-  // digital particles
+  // digital particles rising out of the card
   const makeParticles = (n, color) => {
     const pos = new Float32Array(n * 3), spd = new Float32Array(n);
     for (let p = 0; p < n; p++) {
-      pos[p*3] = (Math.random() - .5) * 0.6; pos[p*3+1] = (Math.random() - .5) * 0.6; pos[p*3+2] = Math.random() * 0.6;
-      spd[p] = 0.04 + Math.random() * 0.12;
+      pos[p*3] = (Math.random() - .5) * 0.9; pos[p*3+1] = (Math.random() - .5) * 1.3; pos[p*3+2] = Math.random() * 0.4;
+      spd[p] = 0.03 + Math.random() * 0.1;
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: 0.009, transparent: true, opacity: 0 }));
-    pts.userData.spd = spd; stage.add(pts); return pts;
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: 0.008, transparent: true, opacity: 0, depthWrite: false }));
+    pts.userData.spd = spd; pts.renderOrder = 998; root.add(pts); return pts;
   };
   const partsA = makeParticles(Math.floor(CONFIG.particles / 2), COL.orange);
   const partsB = makeParticles(Math.ceil(CONFIG.particles / 2), COL.blue);
 
-  // scan plane sweeping up through the stack (projection-mapping feel)
-  const sweep = new THREE.Mesh(new THREE.PlaneGeometry(s * 3.6, s * 3.6),
-    new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-  spin.add(sweep);
-
-  // info tag
-  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.155),
-    new THREE.MeshBasicMaterial({ map: await tagTexture(), transparent: true, opacity: 0 }));
-  tag.position.set(0, -0.47, 0.06); tag.rotation.x = 0.9;
-  stage.add(tag);
-
-  return { cubes, minis, partsA, partsB, sweep, tag, frame, spin, s };
+  return { cover, frame, scan, tilt, yaw, cubes, minis, partsA, partsB, s };
 }
 
 /* ---------- animation ---------- */
 const easeOutBack = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 const rand = (a, b) => a + Math.random() * (b - a);
 
 function animate(S, t, dt, now) {
-  const s = S.s;
-  // emerge
-  S.cubes.forEach((c) => {
-    const p = clamp01((t - c.delay) / 0.7), e = p === 0 ? 0 : easeOutBack(p);
-    c.g.scale.setScalar(Math.max(0.001, e));
-    c.g.position.z = THREE.MathUtils.lerp(-s / 2, c.home.z, e) + Math.sin(now * 1.6 + c.delay * 9) * 0.004 * p;
-    // glitch offset
-    const glitching = now < c.glitchUntil;
-    c.g.position.x = c.home.x + (glitching ? c.glitchDX : 0);
-    c.ghostA.visible = c.ghostB.visible = glitching;
-    if (glitching) { c.ghostA.position.x = -0.018; c.ghostB.position.x = 0.018; }
+  // 1) cover fades in instantly so print and 3D layers line up, then layers peel up
+  S.cover.material.opacity = clamp01(t / 0.25);
+  layers.forEach((L) => {
+    const p = clamp01((t - 0.25 - L.delay) / 0.9);
+    const e = p ? easeOutBack(p) : 0;
+    const z = 0.001 + L.z * e + Math.sin(now * 1.3 + L.z * 40) * 0.005 * p * CONFIG.depth;
+    const glitching = L.glitch && now < L.gUntil;
+    L.mesh.position.set(L.cx + (glitching ? L.gdx : 0), L.cy, z);
+    L.mesh.material.opacity = L.op * clamp01(t / 0.25);
+    if (L.shadow) {
+      // light from upper-left: the higher the layer, the further its shadow falls
+      L.shadow.position.set(L.cx + z * 0.22, L.cy - z * 0.22, 0.0015);
+      L.shadow.material.opacity = 0.16 * p;
+    }
   });
-  S.minis.forEach((c, n) => {
-    const p = clamp01((t - 1.0 - n * 0.15) / 0.6);
+
+  // 2) cube stack: rise out of the card, then sway and periodically explode
+  const lift = easeOutCubic(clamp01((t - 0.5) / 1.2));
+  S.tilt.position.z = 0.02 + CONFIG.cubeLift * lift * CONFIG.depth;
+  S.yaw.rotation.y = Math.PI / 4 + Math.sin(now * 0.6) * CONFIG.sway * clamp01((t - 1.6) / 1);
+  const cyc = (now % CONFIG.explodeEvery) / CONFIG.explodeEvery;
+  const burst = t > 2.5 && cyc > 0.75 ? Math.sin((cyc - 0.75) / 0.25 * Math.PI) : 0;
+  const s = S.s;
+  S.cubes.forEach((c) => {
+    const p = clamp01((t - c.delay) / 0.7), e = p ? easeOutBack(p) : 0;
+    c.g.scale.setScalar(Math.max(0.001, e));
+    const spread = burst * s * 0.9;
+    const glitching = now < c.glitchUntil;
+    c.g.position.set(
+      c.home.x + c.dir.x * spread + (glitching ? c.glitchDX : 0),
+      c.home.y + c.dir.y * spread + Math.sin(now * 1.6 + c.delay * 9) * 0.003,
+      c.home.z + c.dir.z * spread);
+    c.ghostA.visible = c.ghostB.visible = glitching;
+    if (glitching) { c.ghostA.position.x = -0.016; c.ghostB.position.x = 0.016; }
+    // light wave climbing layer by layer
+    const wave = (now * 0.8) % 1.4;
+    c.glow.material.opacity = Math.max(0, 1 - Math.abs(c.k * 0.4 - wave) / 0.25) * 0.5 * p;
+  });
+  S.minis.forEach((c) => {
+    const p = clamp01((t - 1.6 - c.n * 0.15) / 0.6);
     c.g.scale.setScalar(Math.max(0.001, p ? easeOutBack(p) : 0));
-    c.g.position.z = c.home.z + Math.sin(now * 1.2 + n) * 0.02;
+    c.g.position.set(c.home.x, c.home.y + Math.sin(now * 1.2 + c.n) * 0.02, c.home.z);
     c.g.rotation.x += dt * 0.9; c.g.rotation.y += dt * 0.6;
   });
 
-  // spin after the stack has landed
-  const settled = clamp01((t - 1.2) / 1.0);
-  S.spin.rotation.z += dt * CONFIG.spinSpeed * settled;
-
-  // scan sweep + per-cube light-up
-  const H = s * 3.2, period = 2.6;
-  const sz = ((now % period) / period) * H;
-  S.sweep.position.z = sz;
-  S.sweep.material.opacity = 0.18 * settled;
-  S.cubes.forEach((c) => {
-    const d = Math.abs(c.home.z - sz) / (s * 0.7);
-    c.glow.material.opacity = Math.max(0, 1 - d) * 0.55 * settled;
-  });
-
-  // particles
+  // 3) projector scan line + particles + calibration frame
+  const sc = (now % 3.2) / 3.2;
+  S.scan.position.set(0, HALF_H - sc * HALF_H * 2, 0.12 * CONFIG.depth);
+  S.scan.material.opacity = 0.8 * clamp01((t - 1.2) / 0.5);
   [S.partsA, S.partsB].forEach((pts) => {
     const pos = pts.geometry.attributes.position.array, spd = pts.userData.spd;
-    for (let p = 0; p < spd.length; p++) {
-      pos[p*3+2] += spd[p] * dt;
-      if (pos[p*3+2] > 0.6) { pos[p*3+2] = 0; pos[p*3] = (Math.random() - .5) * 0.6; pos[p*3+1] = (Math.random() - .5) * 0.6; }
+    for (let i = 0; i < spd.length; i++) {
+      pos[i*3+2] += spd[i] * dt;
+      if (pos[i*3+2] > 0.4) { pos[i*3+2] = 0; pos[i*3] = (Math.random() - .5) * 0.9; pos[i*3+1] = (Math.random() - .5) * 1.3; }
     }
     pts.geometry.attributes.position.needsUpdate = true;
-    pts.material.opacity = 0.9 * clamp01((t - 0.4) / 0.8);
+    pts.material.opacity = 0.9 * clamp01((t - 1.0) / 0.8);
   });
-
-  // tag + frame
-  S.tag.material.opacity = clamp01((t - 1.6) / 0.5);
-  S.frame.material.opacity = t < 0.6 ? (Math.floor(t * 20) % 2 ? 1 : 0.2) : 0.6;
+  S.frame.material.opacity = t < 0.6 ? (Math.floor(t * 20) % 2 ? 1 : 0.2) : 0;
 }
 
 function scheduleGlitch(S, now) {
-  const pool = S.cubes;
-  const n = Math.random() < 0.3 ? 0 : 1 + Math.floor(Math.random() * 3);
-  if (n === 0) {
-    // slice glitch: a whole layer jumps together
+  // layers
+  const gl = layers.filter((L) => L.glitch);
+  const nL = 1 + Math.floor(Math.random() * 3);
+  for (let q = 0; q < nL; q++) {
+    const L = gl[Math.floor(Math.random() * gl.length)];
+    L.gdx = rand(-0.03, 0.03); L.gUntil = now + rand(0.06, 0.18);
+  }
+  // cubes
+  if (Math.random() < 0.35) {
     const k = Math.floor(Math.random() * 2), dx = rand(-0.05, 0.05), until = now + rand(0.08, 0.18);
-    pool.filter((c) => c.k === k).forEach((c) => { c.glitchDX = dx; c.glitchUntil = until; });
+    S.cubes.filter((c) => c.k === k).forEach((c) => { c.glitchDX = dx; c.glitchUntil = until; });
   } else {
+    const n = 1 + Math.floor(Math.random() * 2);
     for (let q = 0; q < n; q++) {
-      const c = pool[Math.floor(Math.random() * pool.length)];
+      const c = S.cubes[Math.floor(Math.random() * S.cubes.length)];
       c.glitchDX = rand(-0.04, 0.04); c.glitchUntil = now + rand(0.06, 0.2);
     }
   }
