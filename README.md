@@ -52,3 +52,9 @@ npx vercel --prod
 - 酷卡用**霧面**紙。亮面紙容易反光，會造成辨識失敗。
 - 正面細節多、對比高，有利於辨識。之後如果改圖，避免大面積純色或大面積重複花紋。
 - 在 LINE 或 IG 內建瀏覽器開啟時，可能無法使用相機，請改用 Safari 或 Chrome。可以在 QR 旁加註提醒。
+
+## 海報（A1 主視覺）
+- `targets.mind` 內含兩張辨識圖：第 0 張 = 酷卡正面（`targets/card.jpg`），第 1 張 = A1 海報（`poster/poster.jpg`）。掃到哪張就播哪張的分層效果。
+- 海報圖層直接從海報原圖切出（`poster/*.png` + `poster/layers.json`），`poster/cover.jpg` 是抹掉浮起元素後的底圖。改了海報要重切：`python3 poster/split_poster.py 海報.jpg poster`
+- 重新編譯辨識檔：`node targets/compile.cjs targets.mind targets/card.jpg poster/poster.jpg`（需要 Playwright；也可以到 https://hiukim.github.io/mind-ar-js-doc/tools/compile 依同樣順序上傳兩張圖）
+- 桌機預覽（不開相機）：`index.html?preview=poster&tilt=0.9` 或 `?preview=card`

@@ -1,0 +1,12 @@
+<!doctype html><html><body><script type="module">
+import { Compiler } from './mindar-image.prod.js';
+window.run = async (srcs) => {
+  const imgs = await Promise.all(srcs.map(s => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = s; })));
+  const c = new Compiler();
+  await c.compileImageTargets(imgs, p => { window.prog = p; });
+  const buf = await c.exportData();
+  let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+window.ready = true;
+</script></body></html>

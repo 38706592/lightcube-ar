@@ -69,7 +69,7 @@
   <div>
     <h1>LIGHT<br>CUBE</h1>
     <h2>光影立方・AR</h2>
-    <p>開啟相機，把鏡頭對準 <span class="hl">酷卡正面</span>，<br>立方體會從卡片裡浮出來。</p>
+    <p>開啟相機，把鏡頭對準 <span class="hl">酷卡正面</span> 或 <span class="hl">主視覺海報</span>，<br>立方體會從畫面裡浮出來。</p>
   </div>
   <div>
     <div class="bars"></div>
@@ -80,7 +80,7 @@
 
 <div id="scan" aria-live="polite">
   <div class="box"><i></i><i></i><i></i><i></i><div class="line"></div></div>
-  <div class="label">將鏡頭對準酷卡正面</div>
+  <div class="label">對準酷卡正面或海報（海報請整張入鏡）</div>
 </div>
 
 <div id="msg" role="alert"></div>
@@ -91,9 +91,9 @@ import { MindARThree } from 'mindar-image-three';
 
 /* ================= CONFIG (可自行調整) ================= */
 const CONFIG = {
-  target: './targets.mind',   // 用酷卡正面編譯出的辨識檔
+  target: './targets.mind',   // 辨識檔：第 0 張 = 酷卡正面，第 1 張 = A1 主視覺海報
   depth: 1.8,                 // 分層深度倍率：1 = 原本，2 = 兩倍立體
-  cubeSize: 0.12,             // 立方體大小（1 = 卡片寬度）
+  cubeSize: 0.12,             // 酷卡上的立方體大小（1 = 卡片寬度）
   cubeLift: 0.16,             // 立方體浮出卡面的高度
   sway: 0.45,                 // 立方體左右擺動幅度 (rad)
   explodeEvery: 6,            // 立方體爆開重組的間隔（秒）
@@ -107,9 +107,11 @@ const HEX = { blue: '#2660A4', orange: '#FF9505', black: '#000000', paper: '#F6F
 const $ = (s) => document.querySelector(s);
 const showMsg = (t) => { const m = $('#msg'); m.textContent = t; m.classList.add('on'); };
 
-/* ---------- card space helpers (design px 600×888 → card units, width = 1) ---------- */
-const CW = 600, CH = 888, HALF_H = CH / CW / 2;   // 0.74
-const toCard = (x, y, w, h) => ({ cx: (x + w / 2) / CW - 0.5, cy: HALF_H - (y + h / 2) / CW, w: w / CW, h: h / CW });
+/* ---------- target space helpers (design px → target units, width = 1) ---------- */
+// SP is the design size of whichever target is being built: card 600×888, poster 1169×1655
+let SP = { W: 600, H: 888 };
+const halfH = () => SP.H / SP.W / 2;
+const toCard = (x, y, w, h) => ({ cx: (x + w / 2) / SP.W - 0.5, cy: halfH() - (y + h / 2) / SP.W, w: w / SP.W, h: h / SP.W });
 const PX = 3; // canvas pixels per design px
 
 function canvasTex(w, h, draw) {
@@ -134,12 +136,13 @@ async function loadFonts() {
 }
 
 /* ---------- textures for each card element ---------- */
-function hatchTexture() {
+function hatchTexture(kind = 'diag') {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d');
   g.fillStyle = HEX.paper; g.fillRect(0, 0, 128, 128);
   g.strokeStyle = '#000'; g.lineWidth = 7;
-  for (let i = -128; i < 256; i += 18) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke(); }
+  if (kind === 'horiz') { g.lineWidth = 8; for (let y = 8; y < 128; y += 16) { g.beginPath(); g.moveTo(0, y); g.lineTo(128, y); g.stroke(); } }
+  else for (let i = -128; i < 256; i += 18) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 const gridTex = (w, h) => canvasTex(w, h, (g) => {
@@ -228,7 +231,7 @@ const footerTex = () => canvasTex(564, 64, (g) => {
 });
 
 /* ---------- layered card ---------- */
-const layers = [];
+let layers = [];   // the target currently being built; each scene keeps its own list
 function addLayer(root, o) {
   const r = toCard(o.x, o.y, o.w, o.h);
   const geo = new THREE.PlaneGeometry(r.w, r.h);
@@ -249,7 +252,7 @@ function addLayer(root, o) {
 }
 
 /* ---------- cube factory ---------- */
-let HATCH;
+let HATCH, HATCH_H;
 const TYPES = {
   B: { top: 'hatch', l: COL.blue,   r: COL.black },
   O: { top: COL.orange, l: COL.black, r: COL.blue },
@@ -257,12 +260,13 @@ const TYPES = {
   K: { top: COL.blue,  l: COL.orange, r: COL.black },
   L: { top: COL.paper, l: COL.paper, r: COL.paper },
 };
-const mat = (v) => v === 'hatch' ? new THREE.MeshBasicMaterial({ map: HATCH }) : new THREE.MeshBasicMaterial({ color: v });
+const mat = (v) => v === 'hatch' ? new THREE.MeshBasicMaterial({ map: HATCH })
+  : v === 'hatchH' ? new THREE.MeshBasicMaterial({ map: HATCH_H }) : new THREE.MeshBasicMaterial({ color: v });
 // stack is built Y-up; BoxGeometry faces: [+x, -x, +y(top), -y, +z, -z]
-function makeCube(type, s) {
-  const t = TYPES[type];
+function makeCube(type, s, fill = 0.95) {
+  const t = typeof type === 'string' ? TYPES[type] : type;
   const g = new THREE.Group();
-  const geo = new THREE.BoxGeometry(s * 0.95, s * 0.95, s * 0.95);
+  const geo = new THREE.BoxGeometry(s * fill, s * fill, s * fill);
   const body = new THREE.Mesh(geo, [mat(t.l), mat(t.l), mat(t.top), mat(COL.black), mat(t.r), mat(t.r)]);
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: COL.black }));
   const glow = new THREE.Mesh(new THREE.BoxGeometry(s * 1.03, s * 1.03, s * 1.03),
@@ -276,9 +280,11 @@ function makeCube(type, s) {
 }
 
 /* ---------- scene ---------- */
-async function build(root) {
+async function buildCard(root) {
+  SP = { W: 600, H: 888 }; layers = [];
+  const HALF_H = halfH();
   await loadFonts();
-  HATCH = hatchTexture();
+  HATCH = HATCH || hatchTexture(); HATCH_H = HATCH_H || hatchTexture('horiz');
 
   // paper cover: hides the print so the lifted layers don't double up
   const cover = new THREE.Mesh(new THREE.PlaneGeometry(1, HALF_H * 2),
@@ -326,6 +332,56 @@ async function build(root) {
   addLayer(root, { x: 236 - g6, y: 610, w: 364, h: 180, z: .17, tex: titleTex(364, 180, '立方', HEX.blue), shadow: false, glitch: true });
   addLayer(root, { x: 236, y: 610, w: 364, h: 180, z: .19, tex: titleTex(364, 180, '立方', '#000', { top: .22, size: .08, dx: -18 }), glitch: true });
 
+  return finishScene(root, cover, () => {
+    /* ---- isometric cube stack, floating above the card ---- */
+    const s = CONFIG.cubeSize;
+    const layout = [
+      [0,0,0,'B'],[1,0,0,'O'],[0,1,0,'W'],[1,1,0,'B'],[2,0,0,'W'],[0,2,0,'O'],[2,1,0,'K'],
+      [0,0,1,'K'],[1,0,1,'B'],[0,1,1,'O'],
+      [0,0,2,'W'],
+    ];
+    // i → +x, j → +z (toward viewer), k → up
+    return { s, at: toCard(105, 236, 390, 421), cubes: layout.map(([i, j, k, type]) => ({ type, k, home: [(i - 0.8) * s, (k - 1) * s, (j - 0.8) * s], order: k * 3 + i + j })) };
+  });
+}
+
+/* ---------- A1 poster: layers are cut straight from the poster art (poster/*.png) ---------- */
+async function buildPoster(root) {
+  const info = await (await fetch('./poster/layers.json')).json();
+  SP = { W: info.W, H: info.H }; layers = [];
+  HATCH = HATCH || hatchTexture(); HATCH_H = HATCH_H || hatchTexture('horiz');
+  const loader = new THREE.TextureLoader();
+  const tex = (f) => new Promise((ok) => loader.load('./poster/' + f, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, () => ok(null)));
+
+  // cover: the poster with every lifted piece (and the printed cube stack) painted out
+  const cover = new THREE.Mesh(new THREE.PlaneGeometry(1, halfH() * 2),
+    new THREE.MeshBasicMaterial({ map: await tex('cover.jpg'), transparent: true, opacity: 0, depthWrite: false }));
+  cover.position.z = 0.0005; cover.renderOrder = 1; root.add(cover);
+
+  const texs = await Promise.all(info.layers.map((l) => tex(l.name + '.png')));
+  info.layers.forEach((l, n) => texs[n] && addLayer(root, { ...l, tex: texs[n] }));
+
+  return finishScene(root, cover, () => {
+    // printed stack: 3-2-1 isometric staircase, hex width 175 px → edge = 175 / √2 poster px
+    const s = 175 / Math.SQRT2 / SP.W;
+    const P = COL.paper, O = COL.orange, B = COL.blue, K = COL.black;
+    // [i (right-down), j (left-down), k (up), top, left face, right face]
+    const layout = [
+      [0, 0, 0, K, K, K], [0, 0, 1, K, K, K], [0, 1, 0, K, K, K], [1, 0, 0, K, K, K],   // hidden core
+      [0, 2, 0, O, 'hatchH', B], [1, 1, 0, P, O, K], [2, 0, 0, P, 'hatch', B],
+      [0, 1, 1, B, 'hatchH', O], [1, 0, 1, K, O, 'hatch'],
+      [0, 0, 2, O, K, B],
+    ];
+    const st = info.stack;
+    // local axes after yaw: -x faces viewer-left, +z faces viewer-right
+    return { s, fill: 1, fit: toCard(st.x, st.y, st.w, st.h),
+      cubes: layout.map(([i, j, k, top, l, r]) => ({ type: { top, l, r }, k, home: [-j * s, k * s, i * s], order: k * 3 + i + j })) };
+  });
+}
+
+/* ---------- pieces shared by both targets: stack, scan line, particles, calibration frame ---------- */
+function finishScene(root, cover, stackSpec) {
+  const HALF_H = halfH(), W = 1, myLayers = layers;
   // calibration frame flash
   const fw = 0.47, fh = HALF_H - 0.02;
   const frame = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
@@ -334,35 +390,42 @@ async function build(root) {
   root.add(frame);
 
   // horizontal projector scan line sweeping down through all layers
-  const scan = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.006),
+  const scan = new THREE.Mesh(new THREE.PlaneGeometry(W * 1.04, 0.006),
     new THREE.MeshBasicMaterial({ color: COL.orange, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   scan.renderOrder = 999; root.add(scan);
 
-  /* ---- isometric cube stack, floating above the card ---- */
-  const s = CONFIG.cubeSize;
-  const stackPos = toCard(105, 236, 390, 421);
+  /* ---- isometric cube stack, floating above the target ---- */
+  const spec = stackSpec(), s = spec.s;
   const tilt = new THREE.Group();                // tilt top toward viewer = isometric look
-  tilt.position.set(stackPos.cx, stackPos.cy, 0.02);
   tilt.rotation.x = 0.6155;
   root.add(tilt);
   const yaw = new THREE.Group(); yaw.rotation.y = Math.PI / 4; tilt.add(yaw);
 
-  const layout = [
-    [0,0,0,'B'],[1,0,0,'O'],[0,1,0,'W'],[1,1,0,'B'],[2,0,0,'W'],[0,2,0,'O'],[2,1,0,'K'],
-    [0,0,1,'K'],[1,0,1,'B'],[0,1,1,'O'],
-    [0,0,2,'W'],
-  ];
-  const cubes = layout.map(([i, j, k, type]) => {
-    const c = makeCube(type, s);
-    // i → +x, j → +z (toward viewer), k → up
-    c.home = new THREE.Vector3((i - 0.8) * s, (k - 1) * s, (j - 0.8) * s);
-    c.dir = c.home.clone().normalize();
-    c.k = k; c.delay = 0.5 + (k * 3 + i + j) * 0.08;
+  const cubes = spec.cubes.map((d) => {
+    const c = makeCube(d.type, s, spec.fill ?? 0.95);
+    c.home = new THREE.Vector3(...d.home);
+    c.k = d.k; c.delay = 0.5 + d.order * 0.08;
     c.glitchUntil = 0; c.glitchDX = 0;
-    c.g.scale.setScalar(0.001);
     yaw.add(c.g);
     return c;
   });
+  if (spec.fit) {
+    // centre the stack's silhouette on the printed one (cubes are at full size here)
+    tilt.position.set(0, 0, 0); root.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    cubes.forEach((c) => { c.g.position.copy(c.home); c.g.updateMatrixWorld(true); box.expandByObject(c.g.children[2]); });
+    const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    box.applyMatrix4(inv);
+    const ctr = box.getCenter(new THREE.Vector3());
+    tilt.position.set(spec.fit.cx - ctr.x, spec.fit.cy - ctr.y, 0.02);
+    // keep explode directions pointing out from the stack's own centre
+    const mid = cubes.reduce((a, c) => a.add(c.home), new THREE.Vector3()).divideScalar(cubes.length);
+    cubes.forEach((c) => { c.dir = c.home.clone().sub(mid).normalize(); });
+  } else {
+    tilt.position.set(spec.at.cx, spec.at.cy, 0.02);
+    cubes.forEach((c) => { c.dir = c.home.clone().normalize(); });
+  }
+  cubes.forEach((c) => c.g.scale.setScalar(0.001));
   const minis = [['O', 0.24, 0.22, 0.10], ['L', -0.26, 0.16, -0.12], ['K', 0.22, -0.2, 0.16], ['W', -0.2, -0.18, 0.2]].map(([t, x, y, z], n) => {
     const c = makeCube(t, s * 0.4); c.home = new THREE.Vector3(x, y, z); c.g.scale.setScalar(0.001); c.n = n;
     yaw.add(c.g); return c;
@@ -372,7 +435,7 @@ async function build(root) {
   const makeParticles = (n, color) => {
     const pos = new Float32Array(n * 3), spd = new Float32Array(n);
     for (let p = 0; p < n; p++) {
-      pos[p*3] = (Math.random() - .5) * 0.9; pos[p*3+1] = (Math.random() - .5) * 1.3; pos[p*3+2] = Math.random() * 0.4;
+      pos[p*3] = (Math.random() - .5) * 0.9; pos[p*3+1] = (Math.random() - .5) * HALF_H * 1.76; pos[p*3+2] = Math.random() * 0.4;
       spd[p] = 0.03 + Math.random() * 0.1;
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -382,7 +445,7 @@ async function build(root) {
   const partsA = makeParticles(Math.floor(CONFIG.particles / 2), COL.orange);
   const partsB = makeParticles(Math.ceil(CONFIG.particles / 2), COL.blue);
 
-  return { cover, frame, scan, tilt, yaw, cubes, minis, partsA, partsB, s };
+  return { cover, frame, scan, tilt, yaw, cubes, minis, partsA, partsB, s, halfH: HALF_H, layers: myLayers, tiltZ: tilt.position.z };
 }
 
 /* ---------- animation ---------- */
@@ -394,7 +457,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 function animate(S, t, dt, now) {
   // 1) cover fades in instantly so print and 3D layers line up, then layers peel up
   S.cover.material.opacity = clamp01(t / 0.25);
-  layers.forEach((L) => {
+  S.layers.forEach((L) => {
     const p = clamp01((t - 0.25 - L.delay) / 0.9);
     const e = p ? easeOutBack(p) : 0;
     const z = 0.001 + L.z * e + Math.sin(now * 1.3 + L.z * 40) * 0.005 * p * CONFIG.depth;
@@ -410,7 +473,7 @@ function animate(S, t, dt, now) {
 
   // 2) cube stack: rise out of the card, then sway and periodically explode
   const lift = easeOutCubic(clamp01((t - 0.5) / 1.2));
-  S.tilt.position.z = 0.02 + CONFIG.cubeLift * lift * CONFIG.depth;
+  S.tilt.position.z = S.tiltZ + CONFIG.cubeLift * lift * CONFIG.depth;
   S.yaw.rotation.y = Math.PI / 4 + Math.sin(now * 0.6) * CONFIG.sway * clamp01((t - 1.6) / 1);
   const cyc = (now % CONFIG.explodeEvery) / CONFIG.explodeEvery;
   const burst = t > 2.5 && cyc > 0.75 ? Math.sin((cyc - 0.75) / 0.25 * Math.PI) : 0;
@@ -439,13 +502,13 @@ function animate(S, t, dt, now) {
 
   // 3) projector scan line + particles + calibration frame
   const sc = (now % 3.2) / 3.2;
-  S.scan.position.set(0, HALF_H - sc * HALF_H * 2, 0.12 * CONFIG.depth);
+  S.scan.position.set(0, S.halfH - sc * S.halfH * 2, 0.12 * CONFIG.depth);
   S.scan.material.opacity = 0.8 * clamp01((t - 1.2) / 0.5);
   [S.partsA, S.partsB].forEach((pts) => {
     const pos = pts.geometry.attributes.position.array, spd = pts.userData.spd;
     for (let i = 0; i < spd.length; i++) {
       pos[i*3+2] += spd[i] * dt;
-      if (pos[i*3+2] > 0.4) { pos[i*3+2] = 0; pos[i*3] = (Math.random() - .5) * 0.9; pos[i*3+1] = (Math.random() - .5) * 1.3; }
+      if (pos[i*3+2] > 0.4) { pos[i*3+2] = 0; pos[i*3] = (Math.random() - .5) * 0.9; pos[i*3+1] = (Math.random() - .5) * S.halfH * 1.76; }
     }
     pts.geometry.attributes.position.needsUpdate = true;
     pts.material.opacity = 0.9 * clamp01((t - 1.0) / 0.8);
@@ -455,7 +518,7 @@ function animate(S, t, dt, now) {
 
 function scheduleGlitch(S, now) {
   // layers
-  const gl = layers.filter((L) => L.glitch);
+  const gl = S.layers.filter((L) => L.glitch);
   const nL = 1 + Math.floor(Math.random() * 3);
   for (let q = 0; q < nL; q++) {
     const L = gl[Math.floor(Math.random() * gl.length)];
@@ -564,12 +627,16 @@ async function startAR() {
   const { renderer, scene, camera } = mindar;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  const anchor = mindar.addAnchor(0);
-  const S = await build(anchor.group);
-
-  let found = false, t = 0, nextGlitch = 0;
-  anchor.onTargetFound = () => { found = true; t = 0; $('#scan').classList.remove('on'); if (navigator.vibrate) navigator.vibrate(30); };
-  anchor.onTargetLost = () => { found = false; $('#scan').classList.add('on'); };
+  // one anchor per image in targets.mind: 0 = 酷卡正面, 1 = A1 海報
+  const T = [];
+  for (const [i, fn] of [[0, buildCard], [1, buildPoster]]) {
+    const anchor = mindar.addAnchor(i);
+    const tg = { S: await fn(anchor.group), found: false, t: 0 };
+    anchor.onTargetFound = () => { tg.found = true; tg.t = 0; $('#scan').classList.remove('on'); if (navigator.vibrate) navigator.vibrate(30); };
+    anchor.onTargetLost = () => { tg.found = false; if (!T.some((x) => x.found)) $('#scan').classList.add('on'); };
+    T.push(tg);
+  }
+  let nextGlitch = 0;
 
   try {
     await mindar.start();
@@ -585,14 +652,47 @@ async function startAR() {
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.05), now = clock.elapsedTime;
-    if (found) {
-      t += dt;
-      if (now > nextGlitch) { scheduleGlitch(S, now); nextGlitch = now + rand(...CONFIG.glitchEvery); }
-      animate(S, t, dt, now);
-    }
+    const glitchNow = now > nextGlitch;
+    if (glitchNow) nextGlitch = now + rand(...CONFIG.glitchEvery);
+    T.forEach((tg) => {
+      if (!tg.found) return;
+      tg.t += dt;
+      if (glitchNow) scheduleGlitch(tg.S, now);
+      animate(tg.S, tg.t, dt, now);
+    });
     renderer.render(scene, camera);
   });
 }
+
+async function startPreview(which) {
+  $('#start').style.display = 'none';
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight); $('#ar').appendChild(renderer.domElement);
+  renderer.setClearColor(0x222222);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 50);
+  const tilt = +(new URLSearchParams(location.search).get('tilt') || 0);
+  camera.position.set(0, -Math.sin(tilt) * 2.4, Math.cos(tilt) * 2.4); camera.lookAt(0, 0, 0);
+  const root = new THREE.Group(); scene.add(root);
+  const S = which === 'poster' ? await buildPoster(root) : await buildCard(root);
+  const img = await new THREE.TextureLoader().loadAsync(which === 'poster' ? './poster/poster.jpg' : './targets/card.jpg');
+  img.colorSpace = THREE.SRGBColorSpace;
+  const print = new THREE.Mesh(new THREE.PlaneGeometry(1, S.halfH * 2), new THREE.MeshBasicMaterial({ map: img }));
+  print.renderOrder = 0; root.add(print);
+  const q = new URLSearchParams(location.search), freeze = q.get('t');
+  const clock = new THREE.Clock(); let t = 0, nextGlitch = 0;
+  renderer.setAnimationLoop(() => {
+    const dt = Math.min(clock.getDelta(), 0.05), now = freeze ? +freeze : clock.elapsedTime;
+    t = freeze ? +freeze : t + dt;
+    if (!freeze && now > nextGlitch) { scheduleGlitch(S, now); nextGlitch = now + rand(...CONFIG.glitchEvery); }
+    animate(S, t, freeze ? 0 : dt, now);
+    renderer.render(scene, camera);
+    window.__frames = (window.__frames || 0) + 1;
+  });
+}
+const PREVIEW = new URLSearchParams(location.search).get('preview');
+if (PREVIEW) startPreview(PREVIEW).catch((e) => showMsg('preview: ' + e.message));
 
 $('#go').addEventListener('click', () => {
   startAR().catch((e) => {

@@ -1,0 +1,283 @@
+{
+ "W": 1169,
+ "H": 1655,
+ "paper": "#F3F2ED",
+ "stack": {
+  "x": 322,
+  "y": 541,
+  "w": 525,
+  "h": 504
+ },
+ "layers": [
+  {
+   "name": "gridTL",
+   "x": 80,
+   "y": 362,
+   "w": 282,
+   "h": 410,
+   "z": 0.02,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "gridBR",
+   "x": 755,
+   "y": 875,
+   "w": 333,
+   "h": 317,
+   "z": 0.025,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "gridBL",
+   "x": 122,
+   "y": 1117,
+   "w": 225,
+   "h": 280,
+   "z": 0.018,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "frame",
+   "x": 40,
+   "y": 42,
+   "w": 1090,
+   "h": 1458,
+   "z": 0.012,
+   "glitch": false,
+   "shadow": false
+  },
+  {
+   "name": "footer",
+   "x": 55,
+   "y": 1488,
+   "w": 1060,
+   "h": 125,
+   "z": 0.03,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "blueL",
+   "x": 80,
+   "y": 615,
+   "w": 120,
+   "h": 353,
+   "z": 0.07,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "blueR",
+   "x": 900,
+   "y": 364,
+   "w": 188,
+   "h": 102,
+   "z": 0.09,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "orangeR",
+   "x": 993,
+   "y": 466,
+   "w": 95,
+   "h": 280,
+   "z": 0.06,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "orangeSq",
+   "x": 345,
+   "y": 1285,
+   "w": 131,
+   "h": 112,
+   "z": 0.08,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "hline",
+   "x": 0,
+   "y": 834,
+   "w": 1169,
+   "h": 22,
+   "z": 0.1,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "stripes",
+   "x": 645,
+   "y": 748,
+   "w": 277,
+   "h": 56,
+   "z": 0.11,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "miniCube",
+   "x": 248,
+   "y": 568,
+   "w": 68,
+   "h": 74,
+   "z": 0.12,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "blackSq",
+   "x": 240,
+   "y": 716,
+   "w": 64,
+   "h": 62,
+   "z": 0.1,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "dots",
+   "x": 908,
+   "y": 298,
+   "w": 26,
+   "h": 80,
+   "z": 0.12,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "cross1",
+   "x": 228,
+   "y": 873,
+   "w": 62,
+   "h": 62,
+   "z": 0.13,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "cross2",
+   "x": 388,
+   "y": 1188,
+   "w": 62,
+   "h": 62,
+   "z": 0.13,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "crossBox",
+   "x": 818,
+   "y": 466,
+   "w": 92,
+   "h": 124,
+   "z": 0.13,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "tagline",
+   "x": 383,
+   "y": 392,
+   "w": 552,
+   "h": 30,
+   "z": 0.1,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "projMap",
+   "x": 1043,
+   "y": 778,
+   "w": 32,
+   "h": 370,
+   "z": 0.14,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "lightCube",
+   "x": 100,
+   "y": 1008,
+   "w": 32,
+   "h": 290,
+   "z": 0.14,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "date",
+   "x": 772,
+   "y": 78,
+   "w": 312,
+   "h": 225,
+   "z": 0.15,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "t1o",
+   "x": 95,
+   "y": 100,
+   "w": 625,
+   "h": 295,
+   "z": 0.15,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t1b",
+   "x": 95,
+   "y": 100,
+   "w": 625,
+   "h": 295,
+   "z": 0.17,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t1k",
+   "x": 95,
+   "y": 100,
+   "w": 625,
+   "h": 295,
+   "z": 0.19,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t2o",
+   "x": 480,
+   "y": 1158,
+   "w": 605,
+   "h": 310,
+   "z": 0.15,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t2b",
+   "x": 480,
+   "y": 1158,
+   "w": 605,
+   "h": 310,
+   "z": 0.17,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t2k",
+   "x": 480,
+   "y": 1158,
+   "w": 605,
+   "h": 310,
+   "z": 0.19,
+   "glitch": true,
+   "shadow": true
+  }
+ ]
+}
