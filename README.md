@@ -60,5 +60,9 @@ npx vercel --prod
 - 桌機預覽（不開相機）：`index.html?preview=poster&tilt=0.9` 或 `?preview=card`
 
 ## 酷卡正面圖層（2026-11-12 起）
-- 酷卡也跟海報一樣，圖層直接從印刷原圖切出（`card/*.png` + `card/layers.json`），`card/cover.jpg` 是抹掉浮起元素和印刷立方體堆疊後的底圖。
-- 改了酷卡正面要重切：`python card/split_card.py targets/card.jpg card`（`card/stack_hexes.json` 是從酷卡 PDF 取出的立方體外框）
+- 酷卡的浮起圖層是從**原始分層設計檔**（`光影立方_酷卡正面_分圖層.svg`）每個群組單獨輸出的透明 PNG（`card/*.png` + `card/layers.json`），所以和印刷完全一致；`card/cover.jpg` 是純紙色底，印刷上的立方體堆疊由 3D 立方體取代。
+- 原始 SVG 是改版前的排版；輸出時已套用印刷定稿的位移：標語 +15 px、底部資訊列 +12.5 px（設計稿 600×888），整體再 −2 px 對齊印刷 PDF。
+- 重做步驟（改了酷卡正面就要重做）：
+  1. `python card/build_card_layers.py svgs <分圖層.svg> <svg 資料夾>`
+  2. 啟動 `node card/ar_server.cjs`（需要把 svg / png 資料夾放在它旁邊的 `svg_layers/`、`png_layers/`），用 Chrome 開 `/_render.html`，執行 `renderAll([...])` 輸出 PNG（MuPDF 畫不出網紋與裁切，要用 Chrome）
+  3. `python card/build_card_layers.py pack <分圖層.svg> <png 資料夾> card`

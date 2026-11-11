@@ -283,11 +283,11 @@ function makeCube(type, s, fill = 0.95) {
 async function buildCard(root) {
   // 2026-11-12: layers are cut straight from the printed card front (card/*.png, made by card/split_card.py),
   // so the lifted pieces match the print exactly; cover.jpg is the card with those pieces + the printed stack painted out
-  const info = await (await fetch('./card/layers.json')).json();
+  const info = await (await fetch('./card/layers.json', { cache: 'no-store' })).json();   // v busts phone caches when the layers are re-cut
   SP = { W: info.W, H: info.H }; layers = [];
   HATCH = HATCH || hatchTexture(); HATCH_H = HATCH_H || hatchTexture('horiz');
   const loader = new THREE.TextureLoader();
-  const tex = (f) => new Promise((ok) => loader.load('./card/' + f, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, () => ok(null)));
+  const tex = (f) => new Promise((ok) => loader.load('./card/' + f + '?v=' + (info.v || ''), (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, () => ok(null)));
 
   const cover = new THREE.Mesh(new THREE.PlaneGeometry(1, halfH() * 2),
     new THREE.MeshBasicMaterial({ map: await tex('cover.jpg'), transparent: true, opacity: 0, depthWrite: false }));

@@ -1,0 +1,15 @@
+<!doctype html><html><body><pre id="log">ready</pre><script>
+// draws each isolated layer SVG (tools/svg_layers/*.svg) on a transparent 1000×1480 canvas and posts the PNG back
+window.renderAll = async (names) => {
+  const out = [];
+  for (const n of names) {
+    const img = new Image(); img.src = '/_svg/' + n + '.svg?v=' + Date.now(); await img.decode();
+    const c = document.createElement('canvas'); c.width = 1000; c.height = 1480;
+    c.getContext('2d').drawImage(img, 0, 0, 1000, 1480);
+    const b64 = c.toDataURL('image/png').split(',')[1];
+    out.push(n + ':' + await (await fetch('/png/' + n + '.png', { method: 'POST', body: b64 })).text());
+    document.getElementById('log').textContent = out.join('\n');
+  }
+  return out;
+};
+</script></body></html>
