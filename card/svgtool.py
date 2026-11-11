@@ -25,7 +25,7 @@ class Card:
                 for c in list(g):
                     if c.tag == NS + 'g' and c.get('id') and c.get('id') != sid: g.remove(c)
                 sub = [c for c in g if c.get('id') == sid][0]
-                kids = list(sub); keepk = set(map(id, kids[slc]))
+                kids = list(sub); keepk = set(map(id, kids[slc])) | {id(k) for k in kids if k.tag == NS + 'defs'}   # glyph symbols live in defs
                 for c in kids:
                     if id(c) not in keepk: sub.remove(c)
             for c in g.iter():
