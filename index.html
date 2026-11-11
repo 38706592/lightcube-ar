@@ -281,67 +281,32 @@ function makeCube(type, s, fill = 0.95) {
 
 /* ---------- scene ---------- */
 async function buildCard(root) {
-  SP = { W: 600, H: 888 }; layers = [];
-  const HALF_H = halfH();
-  await loadFonts();
+  // 2026-11-12: layers are cut straight from the printed card front (card/*.png, made by card/split_card.py),
+  // so the lifted pieces match the print exactly; cover.jpg is the card with those pieces + the printed stack painted out
+  const info = await (await fetch('./card/layers.json')).json();
+  SP = { W: info.W, H: info.H }; layers = [];
   HATCH = HATCH || hatchTexture(); HATCH_H = HATCH_H || hatchTexture('horiz');
+  const loader = new THREE.TextureLoader();
+  const tex = (f) => new Promise((ok) => loader.load('./card/' + f, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, () => ok(null)));
 
-  // paper cover: hides the print so the lifted layers don't double up
-  const cover = new THREE.Mesh(new THREE.PlaneGeometry(1, HALF_H * 2),
-    new THREE.MeshBasicMaterial({ color: COL.paper, transparent: true, opacity: 0, depthWrite: false }));
+  const cover = new THREE.Mesh(new THREE.PlaneGeometry(1, halfH() * 2),
+    new THREE.MeshBasicMaterial({ map: await tex('cover.jpg'), transparent: true, opacity: 0, depthWrite: false }));
   cover.position.z = 0.0005; cover.renderOrder = 1; root.add(cover);
 
-  /* layers: x, y, w, h in design px · z = height above the card */
-  // grid paper
-  [[30, 196, 150, 220, .02], [392, 470, 178, 170, .025], [52, 600, 120, 150, .018]].forEach(([x, y, w, h, z]) =>
-    addLayer(root, { x, y, w, h, z, tex: gridTex(w, h) }));
-  // frame + footer
-  addLayer(root, { x: 12, y: 26, w: 576, h: 774, z: .012, tex: frameTex(), shadow: false });
-  addLayer(root, { x: 18, y: 812.5, w: 564, h: 64, z: .03, tex: footerTex() });   // footer centred between frame and trim edge (2026-11-12)
-  // fingerprint rings
-  addLayer(root, { x: 70, y: 220, w: 460, h: 470, z: .045, tex: ringTex(460, 470), shadow: false, op: .9 });
-  // colour blocks
-  addLayer(root, { x: 30, y: 330, w: 64, h: 190, z: .07, color: COL.blue, glitch: true });
-  addLayer(root, { x: 470, y: 196, w: 100, h: 54, z: .09, color: COL.blue });
-  addLayer(root, { x: 520, y: 250, w: 50, h: 150, z: .06, color: COL.orange, glitch: true });
-  addLayer(root, { x: 172, y: 690, w: 70, h: 60, z: .08, color: COL.orange });
-  // glitch bars
-  addLayer(root, { x: 0, y: 452, w: 600, h: 5, z: .1, color: COL.orange, glitch: true });
-  addLayer(root, { x: 330, y: 404, w: 150, h: 26, z: .11, tex: scanTex(150, 26), glitch: true });
-  addLayer(root, { x: 96, y: 560, w: 120, h: 10, z: .095, color: COL.blue, glitch: true });
-  addLayer(root, { x: 240, y: 600, w: 40, h: 4, z: .1, color: COL.black });
-  // bits
-  addLayer(root, { x: 40, y: 120, w: 56, h: 56, z: .11, tex: checkTex(56, 56) });
-  addLayer(root, { x: 196, y: 586, w: 39, h: 9, z: .12, tex: dotsTex(false, [HEX.blue, HEX.orange, '#000']) });
-  addLayer(root, { x: 476, y: 162, w: 9, h: 39, z: .12, tex: dotsTex(true, [HEX.orange, HEX.blue, '#000']) });
-  addLayer(root, { x: 430, y: 270, w: 36, h: 36, z: .13, tex: crossTex(36, true), shadow: false });
-  addLayer(root, { x: 110, y: 470, w: 30, h: 30, z: .13, tex: crossTex(30), shadow: false });
-  addLayer(root, { x: 196, y: 640, w: 30, h: 30, z: .13, tex: crossTex(30), shadow: false });
-  // small text
-  addLayer(root, { x: 194, y: 225, w: 300, h: 16, z: .1, tex: textTex(300, 16, 'CUBE × LIGHT × PARTICLE × SPACE', '400 11px "Space Mono", monospace', '#000', 3, { y: 12 }) });
-  addLayer(root, { x: 546, y: 420, w: 16, h: 250, z: .14, tex: textTex(16, 250, 'PROJECTION MAPPING', '400 12px "Space Mono", monospace', '#000', 6, { rotate: Math.PI / 2, y: 12 }) });
-  addLayer(root, { x: 38, y: 532, w: 18, h: 170, z: .14, tex: textTex(18, 170, 'LIGHT · CUBE', '500 13px "Space Grotesk", sans-serif', HEX.blue, 7, { rotate: -Math.PI / 2, y: 13 }) });
-  addLayer(root, { x: 360, y: 40, w: 200, h: 120, z: .15, tex: dateTex() });
-  // titles: RGB split lives in depth — orange / blue / black sit on separate planes
-  const g6 = 6;
-  addLayer(root, { x: 36 - g6, y: 40, w: 400, h: 180, z: .15, tex: titleTex(400, 180, '光影', HEX.orange), shadow: false, glitch: true });
-  addLayer(root, { x: 36 + g6, y: 40, w: 400, h: 180, z: .17, tex: titleTex(400, 180, '光影', HEX.blue), shadow: false, glitch: true });
-  addLayer(root, { x: 36, y: 40, w: 400, h: 180, z: .19, tex: titleTex(400, 180, '光影', '#000', { top: .46, size: .1, dx: 22 }), glitch: true });
-  addLayer(root, { x: 186, y: 152, w: 46, h: 46, z: .21, color: COL.blue });
-  addLayer(root, { x: 236 + g6, y: 610, w: 364, h: 180, z: .15, tex: titleTex(364, 180, '立方', HEX.orange), shadow: false, glitch: true });
-  addLayer(root, { x: 236 - g6, y: 610, w: 364, h: 180, z: .17, tex: titleTex(364, 180, '立方', HEX.blue), shadow: false, glitch: true });
-  addLayer(root, { x: 236, y: 610, w: 364, h: 180, z: .19, tex: titleTex(364, 180, '立方', '#000', { top: .22, size: .08, dx: -18 }), glitch: true });
+  const texs = await Promise.all(info.layers.map((l) => tex(l.name + '.png')));
+  info.layers.forEach((l, n) => texs[n] && addLayer(root, { ...l, tex: texs[n] }));
 
   return finishScene(root, cover, () => {
-    /* ---- isometric cube stack, floating above the card ---- */
+    /* ---- isometric cube stack, floating above the card, centred on the printed stack ---- */
     const s = CONFIG.cubeSize;
     const layout = [
       [0,0,0,'B'],[1,0,0,'O'],[0,1,0,'W'],[1,1,0,'B'],[2,0,0,'W'],[0,2,0,'O'],[2,1,0,'K'],
       [0,0,1,'K'],[1,0,1,'B'],[0,1,1,'O'],
       [0,0,2,'W'],
     ];
+    const st = info.stack;
     // i → +x, j → +z (toward viewer), k → up
-    return { s, at: toCard(105, 236, 390, 421), cubes: layout.map(([i, j, k, type]) => ({ type, k, home: [(i - 0.8) * s, (k - 1) * s, (j - 0.8) * s], order: k * 3 + i + j })) };
+    return { s, fit: toCard(st.x, st.y, st.w, st.h), cubes: layout.map(([i, j, k, type]) => ({ type, k, home: [(i - 0.8) * s, (k - 1) * s, (j - 0.8) * s], order: k * 3 + i + j })) };
   });
 }
 

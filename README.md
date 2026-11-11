@@ -58,3 +58,7 @@ npx vercel --prod
 - 海報圖層直接從海報原圖切出（`poster/*.png` + `poster/layers.json`），`poster/cover.jpg` 是抹掉浮起元素後的底圖。改了海報要重切：`python3 poster/split_poster.py 海報.jpg poster`
 - 重新編譯辨識檔：`node targets/compile.cjs targets.mind targets/card.jpg poster/poster.jpg`（需要 Playwright；也可以到 https://hiukim.github.io/mind-ar-js-doc/tools/compile 依同樣順序上傳兩張圖）
 - 桌機預覽（不開相機）：`index.html?preview=poster&tilt=0.9` 或 `?preview=card`
+
+## 酷卡正面圖層（2026-11-12 起）
+- 酷卡也跟海報一樣，圖層直接從印刷原圖切出（`card/*.png` + `card/layers.json`），`card/cover.jpg` 是抹掉浮起元素和印刷立方體堆疊後的底圖。
+- 改了酷卡正面要重切：`python card/split_card.py targets/card.jpg card`（`card/stack_hexes.json` 是從酷卡 PDF 取出的立方體外框）

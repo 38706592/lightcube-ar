@@ -1,0 +1,313 @@
+{
+ "W": 1000,
+ "H": 1480,
+ "paper": "#F5F4EF",
+ "stack": {
+  "x": 190,
+  "y": 469,
+  "w": 650,
+  "h": 572
+ },
+ "layers": [
+  {
+   "name": "gridTL",
+   "x": 50,
+   "y": 325,
+   "w": 250,
+   "h": 367,
+   "z": 0.02,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "gridBR",
+   "x": 653,
+   "y": 782,
+   "w": 297,
+   "h": 283,
+   "z": 0.025,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "gridBL",
+   "x": 87,
+   "y": 998,
+   "w": 200,
+   "h": 250,
+   "z": 0.018,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "frame",
+   "x": 15,
+   "y": 37,
+   "w": 970,
+   "h": 1300,
+   "z": 0.012,
+   "glitch": false,
+   "shadow": false
+  },
+  {
+   "name": "footer",
+   "x": 25,
+   "y": 1345,
+   "w": 950,
+   "h": 120,
+   "z": 0.03,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "blueL",
+   "x": 50,
+   "y": 548,
+   "w": 107,
+   "h": 317,
+   "z": 0.07,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "blueR",
+   "x": 783,
+   "y": 325,
+   "w": 167,
+   "h": 90,
+   "z": 0.09,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "orangeR",
+   "x": 867,
+   "y": 415,
+   "w": 83,
+   "h": 250,
+   "z": 0.06,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "orangeSq",
+   "x": 287,
+   "y": 1148,
+   "w": 116,
+   "h": 100,
+   "z": 0.2,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "orangeDot",
+   "x": 766,
+   "y": 897,
+   "w": 29,
+   "h": 29,
+   "z": 0.1,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "hline",
+   "x": 0,
+   "y": 748,
+   "w": 1000,
+   "h": 16,
+   "z": 0.1,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "blueBar",
+   "x": 158,
+   "y": 929,
+   "w": 204,
+   "h": 22,
+   "z": 0.095,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "stripes",
+   "x": 550,
+   "y": 670,
+   "w": 250,
+   "h": 46,
+   "z": 0.11,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "miniCube",
+   "x": 198,
+   "y": 507,
+   "w": 63,
+   "h": 71,
+   "z": 0.12,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "blackSq",
+   "x": 188,
+   "y": 636,
+   "w": 62,
+   "h": 62,
+   "z": 0.11,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "dotsH",
+   "x": 322,
+   "y": 970,
+   "w": 75,
+   "h": 25,
+   "z": 0.12,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "dotsV",
+   "x": 788,
+   "y": 262,
+   "w": 26,
+   "h": 76,
+   "z": 0.12,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "cross1",
+   "x": 198,
+   "y": 777,
+   "w": 45,
+   "h": 60,
+   "z": 0.1,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "cross2",
+   "x": 345,
+   "y": 1060,
+   "w": 40,
+   "h": 60,
+   "z": 0.13,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "crossBox",
+   "x": 705,
+   "y": 422,
+   "w": 90,
+   "h": 115,
+   "z": 0.13,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "tagline",
+   "x": 318,
+   "y": 372,
+   "w": 510,
+   "h": 32,
+   "z": 0.1,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "projMap",
+   "x": 905,
+   "y": 690,
+   "w": 45,
+   "h": 405,
+   "z": 0.2,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "lightCube",
+   "x": 60,
+   "y": 890,
+   "w": 40,
+   "h": 268,
+   "z": 0.14,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "date",
+   "x": 680,
+   "y": 60,
+   "w": 260,
+   "h": 205,
+   "z": 0.15,
+   "glitch": false,
+   "shadow": true
+  },
+  {
+   "name": "t1o",
+   "x": 50,
+   "y": 80,
+   "w": 600,
+   "h": 290,
+   "z": 0.15,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t1b",
+   "x": 50,
+   "y": 80,
+   "w": 600,
+   "h": 290,
+   "z": 0.17,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t1k",
+   "x": 50,
+   "y": 80,
+   "w": 600,
+   "h": 290,
+   "z": 0.19,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t2o",
+   "x": 380,
+   "y": 975,
+   "w": 580,
+   "h": 341,
+   "z": 0.15,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t2b",
+   "x": 380,
+   "y": 975,
+   "w": 580,
+   "h": 341,
+   "z": 0.17,
+   "glitch": true,
+   "shadow": true
+  },
+  {
+   "name": "t2k",
+   "x": 380,
+   "y": 975,
+   "w": 580,
+   "h": 341,
+   "z": 0.19,
+   "glitch": true,
+   "shadow": true
+  }
+ ]
+}
