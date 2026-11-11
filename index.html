@@ -297,7 +297,7 @@ async function buildCard(root) {
     addLayer(root, { x, y, w, h, z, tex: gridTex(w, h) }));
   // frame + footer
   addLayer(root, { x: 12, y: 26, w: 576, h: 774, z: .012, tex: frameTex(), shadow: false });
-  addLayer(root, { x: 18, y: 800, w: 564, h: 64, z: .03, tex: footerTex() });
+  addLayer(root, { x: 18, y: 812.5, w: 564, h: 64, z: .03, tex: footerTex() });   // footer centred between frame and trim edge (2026-11-12)
   // fingerprint rings
   addLayer(root, { x: 70, y: 220, w: 460, h: 470, z: .045, tex: ringTex(460, 470), shadow: false, op: .9 });
   // colour blocks
@@ -318,7 +318,7 @@ async function buildCard(root) {
   addLayer(root, { x: 110, y: 470, w: 30, h: 30, z: .13, tex: crossTex(30), shadow: false });
   addLayer(root, { x: 196, y: 640, w: 30, h: 30, z: .13, tex: crossTex(30), shadow: false });
   // small text
-  addLayer(root, { x: 194, y: 210, w: 300, h: 16, z: .1, tex: textTex(300, 16, 'CUBE × LIGHT × PARTICLE × SPACE', '400 11px "Space Mono", monospace', '#000', 3, { y: 12 }) });
+  addLayer(root, { x: 194, y: 225, w: 300, h: 16, z: .1, tex: textTex(300, 16, 'CUBE × LIGHT × PARTICLE × SPACE', '400 11px "Space Mono", monospace', '#000', 3, { y: 12 }) });
   addLayer(root, { x: 546, y: 420, w: 16, h: 250, z: .14, tex: textTex(16, 250, 'PROJECTION MAPPING', '400 12px "Space Mono", monospace', '#000', 6, { rotate: Math.PI / 2, y: 12 }) });
   addLayer(root, { x: 38, y: 532, w: 18, h: 170, z: .14, tex: textTex(18, 170, 'LIGHT · CUBE', '500 13px "Space Grotesk", sans-serif', HEX.blue, 7, { rotate: -Math.PI / 2, y: 13 }) });
   addLayer(root, { x: 360, y: 40, w: 200, h: 120, z: .15, tex: dateTex() });
